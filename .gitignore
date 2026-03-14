@@ -1,0 +1,9 @@
+node_modules/
+.env
+dist/
+.DS_Store
+*.pem
+*.key
+coverage/
+.nyc_output/
+prisma/migrations/  
