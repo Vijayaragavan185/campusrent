@@ -1,0 +1,27 @@
+# .github/workflows/deploy-backend.yml
+name: Deploy Backend
+ 
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**']   # Only runs when backend files change
+ 
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+ 
+      - name: SSH into EC2 and deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key:      ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/campusrent/backend
+            git pull origin main
+            npm install --omit=dev
+            npx prisma migrate deploy
+            npx prisma generate
+            pm2 restart campusrent-api
