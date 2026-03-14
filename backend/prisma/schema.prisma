@@ -1,0 +1,87 @@
+// backend/prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+ 
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+ 
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String
+  password    String
+  department  String?
+  year        String?
+  avatar      String?
+  verified    Boolean   @default(false)
+  isLister    Boolean   @default(false)
+  rating      Float     @default(0)
+  createdAt   DateTime  @default(now())
+  listings    Listing[]
+  bookings    Booking[] @relation("renter")
+  messages    Message[]
+  reviews     Review[]  @relation("reviewer")
+}
+ 
+model Listing {
+  id          String    @id @default(cuid())
+  title       String
+  description String
+  category    String
+  condition   String    // 'New' | 'Good' | 'Fair'
+  pricePerDay Float
+  images      String[]  // Array of S3 URLs
+  location    String
+  available   Boolean   @default(true)
+  featured    Boolean   @default(false)
+  ownerId     String
+  owner       User      @relation(fields: [ownerId], references: [id])
+  bookings    Booking[]
+  reviews     Review[]
+  createdAt   DateTime  @default(now())
+}
+ 
+model Booking {
+  id        String   @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
+  status    String   @default("pending") // pending|accepted|rejected|cancelled|completed
+  totalCost Float
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id])
+  renterId  String
+  renter    User     @relation("renter", fields: [renterId], references: [id])
+  createdAt DateTime @default(now())
+}
+ 
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String   // Format: userId1_userId2_listingId
+  content        String
+  senderId       String
+  sender         User     @relation(fields: [senderId], references: [id])
+  createdAt      DateTime @default(now())
+}
+ 
+model Review {
+  id         String   @id @default(cuid())
+  rating     Int      // 1-5
+  comment    String
+  reviewerId String
+  reviewer   User     @relation("reviewer", fields: [reviewerId], references: [id])
+  listingId  String
+  listing    Listing  @relation(fields: [listingId], references: [id])
+  createdAt  DateTime @default(now())
+}
+ 
+model OtpCode {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
