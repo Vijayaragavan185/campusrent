@@ -1,0 +1,40 @@
+# .github/workflows/deploy-frontend.yml
+name: Deploy Frontend
+ 
+on:
+  push:
+    branches: [main]
+    paths: ['frontend/**']
+ 
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with: { node-version: '18' }
+ 
+      - name: Build React app
+        working-directory: frontend
+        env:
+          VITE_API_URL:    ${{ secrets.VITE_API_URL }}
+          VITE_SOCKET_URL: ${{ secrets.VITE_SOCKET_URL }}
+        run: |
+          npm ci
+          npm run build
+ 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+ 
+      - name: Upload to S3
+        run: aws s3 sync frontend/dist s3://campusrent-web --delete
+ 
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CF_DISTRIBUTION_ID }} \
+            --paths '/*'
