@@ -48,8 +48,15 @@ export const listingsAPI = {
 export const bookingsAPI = {
   create:       (data)       => api.post('/bookings', data),
   getMy:        ()           => api.get('/bookings/my'),
+  getLending:   ()           => api.get('/bookings/lending'),
   getOne:       (id)         => api.get(`/bookings/${id}`),
   updateStatus: (id, status) => api.put(`/bookings/${id}/status`, { status }),
+  requestReturn:(id)         => api.put(`/bookings/${id}/status`, { status: 'requested_return' }),
+  markReturned: (id)         => api.put(`/bookings/${id}/status`, { status: 'returned' }),
+  complete:     (id)         => api.put(`/bookings/${id}/status`, { status: 'completed' }),
+  requestExtension: (id, requestedEndDate) => api.put(`/bookings/${id}/extend`, { requestedEndDate }),
+  decideExtension: (id, decision) => api.put(`/bookings/${id}/extend/decision`, { decision }),
+  getAuditTrail: (id) => api.get(`/bookings/${id}/audit`),
 };
 
 export const messagesAPI = {
