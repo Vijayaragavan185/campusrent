@@ -3,12 +3,23 @@ import { useNavigate } from "react-router";
 import { ArrowLeft, Upload, X } from "lucide-react";
 import { Link } from "react-router";
 import { toast } from "sonner";
+import { listingsAPI } from "../../services/api";
+import { useAuthStore } from "../../store/authStore";
 
 const categories = ["electronics", "books", "clothing", "sports", "tools", "other"];
 const conditions = ["new", "good", "fair"];
 
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read image file"));
+    reader.readAsDataURL(file);
+  });
+
 export default function PostListing() {
   const navigate = useNavigate();
+  const currentUser = useAuthStore((s) => s.user);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [condition, setCondition] = useState("");
@@ -17,32 +28,57 @@ export default function PostListing() {
   const [location, setLocation] = useState("");
   const [images, setImages] = useState<string[]>([]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && images.length < 5) {
-      // In a real app, this would upload to a server
-      // For now, we'll just show placeholder
-      const newImages = Array.from(files).slice(0, 5 - images.length).map(() => 
-        "https://images.unsplash.com/photo-1600180758890-6b94519a8ba6?w=400"
-      );
-      setImages([...images, ...newImages]);
+      try {
+        const fileList = Array.from(files).slice(0, 5 - images.length);
+        const newImages = await Promise.all(fileList.map(readFileAsDataUrl));
+        setImages([...images, ...newImages]);
+      } catch (error) {
+        toast.error("Failed to process selected image(s)");
+      }
     }
+
+    // allow re-selecting the same file again later
+    e.target.value = "";
   };
 
   const removeImage = (index: number) => {
     setImages(images.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!currentUser?.id) {
+      toast.error("Please sign in to post a listing");
+      navigate('/login');
+      return;
+    }
     
     if (!title || !category || !condition || !description || !price || !location) {
       toast.error("Please fill in all fields");
       return;
     }
 
-    toast.success("Listing posted successfully!");
-    navigate("/home");
+    try {
+      const res = await listingsAPI.create({
+        title,
+        category,
+        condition,
+        description,
+        pricePerDay: Number(price),
+        location,
+        images,
+      });
+
+      toast.success("Listing posted successfully!");
+      navigate(`/listing/${res.data.id}`);
+    } catch (error: any) {
+      const message = error?.response?.data?.error || 'Failed to post listing';
+      toast.error(message);
+    }
   };
 
   return (
