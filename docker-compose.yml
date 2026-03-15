@@ -1,5 +1,4 @@
 # campusrent/docker-compose.yml
-version: '3.8'
 services:
   postgres:
     image: postgres:15
@@ -11,5 +10,48 @@ services:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campusrent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    profiles: ["fullstack"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 5000
+      NODE_ENV: development
+      FRONTEND_URL: http://localhost:5173
+      DATABASE_URL: postgresql://campusrent:campusrent123@postgres:5432/campusrent
+      JWT_SECRET: change-me-in-production
+      AWS_REGION: ap-south-1
+      AWS_ACCESS_KEY_ID: placeholder
+      AWS_SECRET_ACCESS_KEY: placeholder
+      SES_FROM_EMAIL: no-reply@example.com
+      S3_BUCKET_NAME: placeholder
+    ports:
+      - '5000:5000'
+    restart: unless-stopped
+
+  frontend:
+    profiles: ["fullstack"]
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:5000/api
+      VITE_SOCKET_URL: http://localhost:5000
+    ports:
+      - '5173:5173'
+    restart: unless-stopped
+
 volumes:
   postgres_data:
