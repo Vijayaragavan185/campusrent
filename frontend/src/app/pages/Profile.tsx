@@ -1,14 +1,48 @@
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router";
-import { Star, MapPin, Calendar, Settings as SettingsIcon, CheckCircle } from "lucide-react";
-import { mockUsers, mockListings, mockReviews } from "../data/mockData";
+import { Star, MapPin, Calendar, Settings as SettingsIcon, CheckCircle, ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
+import { usersAPI } from "../../services/api";
+import { toListing, toReview, toUser } from "../../services/normalizers";
+import { useAuthStore } from "../../store/authStore";
 
 export default function Profile() {
   const { id } = useParams();
-  const user = mockUsers.find(u => u.id === id);
-  const userListings = mockListings.filter(l => l.ownerId === id);
-  const userReviews = mockReviews.filter(r => r.userId === id);
+  const authUser = useAuthStore((s) => s.user);
+  const [user, setUser] = useState<any | null>(null);
+  const [userListings, setUserListings] = useState<any[]>([]);
+  const [userReviews, setUserReviews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   
-  const isOwnProfile = id === "1";
+  const isOwnProfile = useMemo(() => id && authUser?.id === id, [id, authUser?.id]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const loadProfile = async () => {
+      try {
+        setLoading(true);
+        const res = await usersAPI.getProfile(id);
+        const data = res.data;
+
+        setUser(toUser({ ...data, itemsListed: (data.listings || []).length }));
+        setUserListings((data.listings || []).map((listing: any) => toListing({ ...listing, owner: data })));
+        setUserReviews((data.reviews || []).map(toReview));
+      } catch (error) {
+        console.error('Failed to load profile', error);
+        toast.error('Could not load user profile');
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [id]);
+
+  if (loading) {
+    return <div className="p-6">Loading profile...</div>;
+  }
 
   if (!user) {
     return <div>User not found</div>;
@@ -19,6 +53,14 @@ export default function Profile() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="container mx-auto px-4 py-6 max-w-4xl">
+          <Link
+            to="/home"
+            className="inline-flex items-center gap-2 text-[#4B5563] hover:text-[#2D6BE4] transition-colors mb-4"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back
+          </Link>
+
           {/* Cover + Avatar */}
           <div className="relative mb-16">
             <div className="h-32 bg-gradient-to-r from-[#2D6BE4] to-[#1e4fad] rounded-2xl" />
@@ -39,7 +81,7 @@ export default function Profile() {
                     </div>
                   )}
                 </div>
-                <p className="text-[#4B5563]">{user.department}</p>
+                <p className="text-[#4B5563]">{user.department || 'Campus Member'}</p>
               </div>
             </div>
             
@@ -145,7 +187,7 @@ export default function Profile() {
             
             <div className="space-y-4">
               {userReviews.map((review) => {
-                const listing = mockListings.find(l => l.id === review.listingId);
+                const listing = review.listing;
                 return (
                   <div key={review.id} className="bg-white rounded-xl p-4">
                     <div className="flex items-start gap-3 mb-3">
