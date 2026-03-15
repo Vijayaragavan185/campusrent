@@ -8,6 +8,44 @@ const rateLimit  = require('express-rate-limit');
  
 const app = express();
 
+app.disable('x-powered-by');
+
+function sanitizeValue(value) {
+  if (Array.isArray(value)) return value.map(sanitizeValue);
+
+  if (value && typeof value === 'object') {
+    const cleaned = {};
+    for (const [key, val] of Object.entries(value)) {
+      // Block common prototype pollution and operator injection keys.
+      if (
+        key === '__proto__' ||
+        key === 'prototype' ||
+        key === 'constructor' ||
+        key.startsWith('$') ||
+        key.includes('.')
+      ) {
+        continue;
+      }
+      cleaned[key] = sanitizeValue(val);
+    }
+    return cleaned;
+  }
+
+  if (typeof value === 'string') {
+    // Remove null bytes that can be abused in parser edge-cases.
+    return value.replace(/\0/g, '');
+  }
+
+  return value;
+}
+
+function requestSanitizer(req, _res, next) {
+  if (req.body && typeof req.body === 'object') req.body = sanitizeValue(req.body);
+  if (req.query && typeof req.query === 'object') req.query = sanitizeValue(req.query);
+  if (req.params && typeof req.params === 'object') req.params = sanitizeValue(req.params);
+  next();
+}
+
 function safeUse(basePath, modulePath) {
   try {
     const router = require(modulePath);
@@ -26,22 +64,40 @@ function safeUse(basePath, modulePath) {
 }
  
 // ── Security middleware ───────────────────────────────────
-app.use(helmet());
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+}));
+
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow non-browser requests (no Origin header) and configured frontend origins.
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS blocked for this origin'));
+  },
   credentials: true,
 }));
  
 // ── Global rate limit: 300 requests per 15 minutes ───────
 app.use(rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 300,
+  windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  max: Number(process.env.RATE_LIMIT_MAX || 300),
   message: { error: 'Too many requests. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/api/health',
 }));
  
 // ── Body parsers ─────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(requestSanitizer);
  
 // ── Logging ──────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
