@@ -1,18 +1,92 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router";
-import { ArrowLeft, Star, MapPin, CheckCircle, Calendar, MessageSquare } from "lucide-react";
-import { mockListings, mockReviews } from "../data/mockData";
+import { ArrowLeft, Star, MapPin, CheckCircle, Calendar as CalendarIcon, MessageSquare, Pencil, ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import * as Dialog from "@radix-ui/react-dialog";
+import { bookingsAPI, listingsAPI, reviewsAPI } from "../../services/api";
+import { toListing, toReview } from "../../services/normalizers";
+import { useAuthStore } from "../../store/authStore";
+import { Calendar } from "../components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
+import { format } from "date-fns";
+
+function getDateRangeKeys(startDate: string, endDate: string) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+
+  start.setUTCHours(0, 0, 0, 0);
+  end.setUTCHours(0, 0, 0, 0);
+
+  const keys: string[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    keys.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return keys;
+}
 
 export default function ListingDetail() {
   const { id } = useParams();
-  const listing = mockListings.find(l => l.id === id);
-  const reviews = mockReviews.filter(r => r.listingId === id);
+  const navigate = useNavigate();
+  const currentUser = useAuthStore((s) => s.user);
+  const [listing, setListing] = useState<any | null>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  const blockedDateSet = useMemo(() => {
+    if (!listing?.blockedDates) return new Set<string>();
+    return new Set((listing.blockedDates || []).map((value: string) => String(value).slice(0, 10)));
+  }, [listing?.blockedDates]);
+
+  const isDateBlocked = (date: Date) => {
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (normalized < today) return true;
+    const key = normalized.toISOString().slice(0, 10);
+    return blockedDateSet.has(key);
+  };
+
+  useEffect(() => {
+    if (!id) return;
+
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [listingRes, reviewsRes] = await Promise.all([
+          listingsAPI.getOne(id),
+          reviewsAPI.getForListing(id),
+        ]);
+
+        setListing(toListing(listingRes.data));
+        setReviews((reviewsRes.data || []).map(toReview));
+      } catch (error) {
+        console.error('Failed to load listing', error);
+        toast.error('Could not load listing details');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [id]);
+
+  const conversationId = useMemo(() => {
+    if (!currentUser?.id || !listing?.owner?.id || !listing?.id) return null;
+    return [currentUser.id, listing.owner.id].sort().join('_') + `_${listing.id}`;
+  }, [currentUser?.id, listing?.owner?.id, listing?.id]);
+
+  if (loading) {
+    return <div className="p-6">Loading listing...</div>;
+  }
 
   if (!listing) {
     return <div>Listing not found</div>;
@@ -24,7 +98,23 @@ export default function ListingDetail() {
     fair: "text-[#F4A623] bg-[#F4A623]/10"
   };
 
-  const handleBookingSubmit = () => {
+  const isOwnListing = Boolean(
+    currentUser?.id &&
+    (currentUser.id === listing.owner?.id || currentUser.id === listing.ownerId)
+  );
+
+  const handleBookingSubmit = async () => {
+    if (!currentUser?.id) {
+      toast.error("Please sign in to request booking");
+      navigate('/login');
+      return;
+    }
+
+    if (isOwnListing) {
+      toast.error("You cannot book your own listing");
+      return;
+    }
+
     if (!startDate || !endDate) {
       toast.error("Please select both start and end dates");
       return;
@@ -33,10 +123,35 @@ export default function ListingDetail() {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    if (days <= 0) {
+      toast.error("End date must be after start date");
+      return;
+    }
+
+    const blockedDates = new Set((listing.blockedDates || []).map((value: string) => String(value).slice(0, 10)));
+    const selectedDateKeys = getDateRangeKeys(startDate, endDate);
+    const overlapsBlockedDates = selectedDateKeys.some((key) => blockedDates.has(key));
+    if (overlapsBlockedDates) {
+      toast.error("Selected dates include already-booked days. Please choose another range.");
+      return;
+    }
+
     const total = days * listing.pricePerDay;
 
-    toast.success(`Booking request sent! Total: $${total} for ${days} days`);
-    setBookingDialogOpen(false);
+    try {
+      await bookingsAPI.create({
+        listingId: listing.id,
+        startDate,
+        endDate,
+        totalCost: total,
+      });
+
+      toast.success(`Booking request sent! Total: $${total} for ${days} days`);
+      setBookingDialogOpen(false);
+    } catch (error: any) {
+      const message = error?.response?.data?.error || 'Failed to send booking request';
+      toast.error(message);
+    }
   };
 
   return (
@@ -107,7 +222,7 @@ export default function ListingDetail() {
                   listing.status === "rented" ? "bg-[#4B5563] text-white" :
                   "bg-[#F4A623] text-white"
                 }`}>
-                  {listing.status}
+                  {listing.availabilityLabel || listing.status}
                 </span>
               </div>
               <div className="flex items-center gap-4 mb-3">
@@ -147,9 +262,9 @@ export default function ListingDetail() {
                   </div>
                   <div className="flex items-center gap-1 text-sm text-[#4B5563]">
                     <Star className="w-4 h-4 text-[#F4A623] fill-[#F4A623]" />
-                    <span>{listing.owner.rating.toFixed(1)}</span>
+                    <span>{Number(listing.owner.rating || 0).toFixed(1)}</span>
                     <span>•</span>
-                    <span>{listing.owner.totalRentals} rentals</span>
+                    <span>{listing.owner.totalRentals || 0} rentals</span>
                   </div>
                 </div>
                 <span className="text-[#2D6BE4]">View Profile →</span>
@@ -235,18 +350,31 @@ export default function ListingDetail() {
 
               <button
                 onClick={() => setBookingDialogOpen(true)}
-                disabled={listing.status !== "available"}
+                disabled={listing.status !== "available" || isOwnListing}
                 className="w-full py-3 bg-[#2D6BE4] text-white rounded-xl hover:bg-[#2557b8] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed mb-3"
               >
-                {listing.status === "available" ? "Request to Rent" : "Not Available"}
+                {isOwnListing
+                  ? "This is your listing"
+                    : listing.status === "available"
+                    ? "Request to Rent"
+                      : listing.availabilityLabel || "Not Available"}
               </button>
 
-              <Link to={`/chat/${listing.owner.id}`}>
-                <button className="w-full py-3 border-2 border-[#2D6BE4] text-[#2D6BE4] rounded-xl hover:bg-[#2D6BE4]/5 transition-colors flex items-center justify-center gap-2">
-                  <MessageSquare className="w-5 h-5" />
-                  Message Owner
-                </button>
-              </Link>
+              {isOwnListing ? (
+                <Link to={`/listing/${listing.id}/edit`}>
+                  <button className="w-full py-3 border-2 border-[#2D6BE4] text-[#2D6BE4] rounded-xl hover:bg-[#2D6BE4]/5 transition-colors flex items-center justify-center gap-2">
+                    <Pencil className="w-5 h-5" />
+                    Edit Listing
+                  </button>
+                </Link>
+              ) : (
+                <Link to={conversationId ? `/chat/${conversationId}` : '/signup'}>
+                  <button className="w-full py-3 border-2 border-[#2D6BE4] text-[#2D6BE4] rounded-xl hover:bg-[#2D6BE4]/5 transition-colors flex items-center justify-center gap-2">
+                    <MessageSquare className="w-5 h-5" />
+                    Message Owner
+                  </button>
+                </Link>
+              )}
 
               <div className="mt-6 pt-6 border-t border-gray-200">
                 <div className="flex items-center gap-2 text-sm text-[#4B5563] mb-2">
@@ -271,33 +399,86 @@ export default function ListingDetail() {
             <Dialog.Title className="text-2xl text-[#111827] mb-6" style={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}>
               Request Booking
             </Dialog.Title>
+            <Dialog.Description className="sr-only">
+              Choose your rental start and end dates to send a booking request for this listing.
+            </Dialog.Description>
 
             <div className="mb-4">
               <label className="block text-[#111827] mb-2">
-                <Calendar className="inline w-4 h-4 mr-2" />
+                <CalendarIcon className="inline w-4 h-4 mr-2" />
                 Start Date
               </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#2D6BE4] focus:border-transparent outline-none"
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-left focus:ring-2 focus:ring-[#2D6BE4] focus:border-transparent outline-none flex items-center justify-between"
+                  >
+                    <span className={startDate ? "text-[#111827]" : "text-[#9CA3AF]"}>
+                      {startDate ? format(new Date(startDate), 'PPP') : 'Select start date'}
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-[#4B5563]" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={startDate ? new Date(startDate) : undefined}
+                    disabled={isDateBlocked}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      const selectedStart = date.toISOString().slice(0, 10);
+                      setStartDate(selectedStart);
+                      if (endDate && new Date(endDate) <= date) {
+                        setEndDate("");
+                      }
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              {Array.isArray(listing.blockedDates) && listing.blockedDates.length > 0 && (
+                <p className="mt-2 text-xs text-[#4B5563]">
+                  {listing.blockedDates.length} date(s) are currently blocked by existing rentals.
+                </p>
+              )}
             </div>
 
             <div className="mb-6">
               <label className="block text-[#111827] mb-2">
-                <Calendar className="inline w-4 h-4 mr-2" />
+                <CalendarIcon className="inline w-4 h-4 mr-2" />
                 End Date
               </label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                min={startDate || new Date().toISOString().split('T')[0]}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#2D6BE4] focus:border-transparent outline-none"
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-left focus:ring-2 focus:ring-[#2D6BE4] focus:border-transparent outline-none flex items-center justify-between"
+                  >
+                    <span className={endDate ? "text-[#111827]" : "text-[#9CA3AF]"}>
+                      {endDate ? format(new Date(endDate), 'PPP') : 'Select end date'}
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-[#4B5563]" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={endDate ? new Date(endDate) : undefined}
+                    disabled={(date) => {
+                      if (isDateBlocked(date)) return true;
+                      if (!startDate) return false;
+                      return date <= new Date(startDate);
+                    }}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      const selectedEnd = date.toISOString().slice(0, 10);
+                      setEndDate(selectedEnd);
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
 
             {startDate && endDate && (
