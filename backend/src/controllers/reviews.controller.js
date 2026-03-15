@@ -3,6 +3,35 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+async function refreshOwnerRating(ownerId) {
+  const listings = await prisma.listing.findMany({
+    where: { ownerId },
+    select: { id: true },
+  });
+
+  if (!listings.length) {
+    await prisma.user.update({
+      where: { id: ownerId },
+      data: { rating: 0 },
+    });
+    return;
+  }
+
+  const listingIds = listings.map((listing) => listing.id);
+  const aggregate = await prisma.review.aggregate({
+    where: {
+      listingId: { in: listingIds },
+    },
+    _avg: { rating: true },
+  });
+
+  const nextRating = Number((aggregate?._avg?.rating || 0).toFixed(2));
+  await prisma.user.update({
+    where: { id: ownerId },
+    data: { rating: nextRating },
+  });
+}
+
 // GET /api/reviews/listing/:listingId
 exports.getForListing = async (req, res, next) => {
   try {
@@ -64,6 +93,29 @@ exports.create = async (req, res, next) => {
       return res.status(400).json({ error: 'You cannot review your own listing' });
     }
 
+    // Only renters who completed (or effectively finished) a booking for this listing can review it
+    const now = new Date();
+    const completedBooking = await prisma.booking.findFirst({
+      where: {
+        listingId,
+        renterId: req.userId,
+        OR: [
+          { status: 'completed' },
+          {
+            status: { in: ['accepted', 'requested_return', 'returned'] },
+            endDate: { lt: now },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (!completedBooking) {
+      return res.status(403).json({
+        error: 'You can review this listing only after completing a booking',
+      });
+    }
+
     // TODO: Uncomment after running: npx prisma migrate dev
     const existingReview = await prisma.review.findFirst({
       where: { listingId, reviewerId: req.userId },
@@ -88,6 +140,8 @@ exports.create = async (req, res, next) => {
         },
       },
     });
+
+    await refreshOwnerRating(listing.ownerId);
 
     res.status(201).json(review);
   } catch (err) { next(err); }
