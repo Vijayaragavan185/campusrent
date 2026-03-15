@@ -36,6 +36,7 @@ model Listing {
   images      String[]  // Array of S3 URLs
   location    String
   available   Boolean   @default(true)
+  blockedDates String[] @default([])
   featured    Boolean   @default(false)
   ownerId     String
   owner       User      @relation(fields: [ownerId], references: [id])
@@ -45,16 +46,40 @@ model Listing {
 }
  
 model Booking {
-  id        String   @id @default(cuid())
-  startDate DateTime
-  endDate   DateTime
-  status    String   @default("pending") // pending|accepted|rejected|cancelled|completed
-  totalCost Float
-  listingId String
-  listing   Listing  @relation(fields: [listingId], references: [id])
-  renterId  String
-  renter    User     @relation("renter", fields: [renterId], references: [id])
-  createdAt DateTime @default(now())
+  id                String   @id @default(cuid())
+  startDate         DateTime
+  endDate           DateTime
+  status            String   @default("pending") // pending|accepted|requested_return|returned|rejected|cancelled|completed
+  extensionStatus   String   @default("none") // none|pending|approved|rejected
+  extensionRequestedEndDate DateTime?
+  extensionRequestedAt DateTime?
+  extensionResolvedAt DateTime?
+  lateFeePerDay     Float    @default(0)
+  lateFeeAccrued    Float    @default(0)
+  lastOverdueFeeCalculatedAt DateTime?
+  reminderSentAt    DateTime?
+  totalCost         Float
+  listingId         String
+  listing           Listing  @relation(fields: [listingId], references: [id])
+  renterId          String
+  renter            User     @relation("renter", fields: [renterId], references: [id])
+  requestedReturnAt DateTime?
+  returnedAt        DateTime?
+  completedAt       DateTime?
+  statusEvents      BookingStatusEvent[]
+  createdAt         DateTime @default(now())
+}
+
+model BookingStatusEvent {
+  id         String   @id @default(cuid())
+  bookingId  String
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+  fromStatus String?
+  toStatus   String
+  action     String
+  actorId    String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
 }
  
 model Message {
