@@ -1,28 +1,80 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Mail, Check } from "lucide-react";
 import { Link } from "react-router";
+import { toast } from "sonner";
+import { authAPI } from "../../services/api";
+import { useAuthStore } from "../../store/authStore";
 
 export default function SignUp() {
   const navigate = useNavigate();
+  const setAuth = useAuthStore((s) => s.setAuth);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (isAuthenticated) navigate('/home');
+  }, [isAuthenticated, navigate]);
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email.endsWith(".edu")) {
-      setError("Please use a valid university email (.edu domain)");
+    if (!email.includes("@")) {
+      setError("Please use a valid university email");
       return;
     }
     
-    setError("");
-    setStep(2);
+    try {
+      setLoading(true);
+      await authAPI.register(email);
+      setError("");
+      setStep(2);
+      toast.success('Verification code sent to your email');
+    } catch (err: any) {
+      const message = err?.response?.data?.error || 'Failed to send verification code';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleVerificationComplete = () => {
-    navigate("/home");
+  const handleVerificationComplete = async () => {
+    if (!otp || !name || !password) {
+      setError('Please fill OTP, name, and password');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await authAPI.verifyOtp({ email, otp, name, password });
+      setAuth(res.data.token, res.data.user);
+      toast.success('Account verified! Welcome to CampusRent');
+      navigate("/home");
+    } catch (err: any) {
+      const message = err?.response?.data?.error || 'Verification failed';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    try {
+      setLoading(true);
+      await authAPI.register(email);
+      toast.success('Verification code resent');
+    } catch (err: any) {
+      const message = err?.response?.data?.error || 'Failed to resend verification code';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -81,10 +133,18 @@ export default function SignUp() {
 
               <button
                 type="submit"
+                disabled={loading}
                 className="w-full py-3 bg-[#2D6BE4] text-white rounded-xl hover:bg-[#2557b8] transition-colors"
               >
-                Continue
+                {loading ? 'Sending...' : 'Continue'}
               </button>
+
+              <p className="text-sm text-[#4B5563] mt-4 text-center">
+                Already have an account?{' '}
+                <Link to="/login" className="text-[#2D6BE4] hover:underline">
+                  Log in
+                </Link>
+              </p>
             </form>
           ) : (
             <div>
@@ -105,11 +165,41 @@ export default function SignUp() {
 
               <div className="bg-[#F3F4F6] rounded-xl p-4 mb-6">
                 <p className="text-sm text-[#4B5563] mb-3">
-                  Click the link in the email to verify your account and complete registration.
+                  Enter the 6-digit code from your email and set your account details.
                 </p>
-                <p className="text-sm text-[#4B5563]">
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    placeholder="6-digit OTP"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
+                  />
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Full name"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
+                  />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password (min 8 chars)"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl"
+                  />
+                </div>
+                {error && (
+                  <p className="text-[#E74C3C] text-sm mt-3">{error}</p>
+                )}
+                <p className="text-sm text-[#4B5563] mt-3">
                   Didn't receive it? Check your spam folder or{" "}
-                  <button className="text-[#2D6BE4] hover:underline">
+                  <button
+                    onClick={handleResend}
+                    className="text-[#2D6BE4] hover:underline"
+                    disabled={loading}
+                  >
                     resend email
                   </button>
                 </p>
@@ -117,9 +207,10 @@ export default function SignUp() {
 
               <button
                 onClick={handleVerificationComplete}
+                disabled={loading}
                 className="w-full py-3 bg-[#2D6BE4] text-white rounded-xl hover:bg-[#2557b8] transition-colors"
               >
-                Continue to Dashboard
+                {loading ? 'Verifying...' : 'Continue to Dashboard'}
               </button>
             </div>
           )}
