@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useEffect } from "react";
 import { Search as SearchIcon, SlidersHorizontal, X } from "lucide-react";
-import { mockListings } from "../data/mockData";
 import ListingCard from "../components/ListingCard";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Slider from "@radix-ui/react-slider";
+import { listingsAPI } from "../../services/api";
+import { toListing } from "../../services/normalizers";
 
 const categories = [
   { id: "all", label: "All" },
@@ -19,16 +21,70 @@ export default function Search() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [priceRange, setPriceRange] = useState([0, 100]);
+  const [selectedNextAvailableDate, setSelectedNextAvailableDate] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [filteredListings, setFilteredListings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const filteredListings = mockListings.filter((listing) => {
-    const matchesSearch = listing.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         listing.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === "all" || listing.category === selectedCategory;
-    const matchesPrice = listing.pricePerDay >= priceRange[0] && listing.pricePerDay <= priceRange[1];
-    
-    return matchesSearch && matchesCategory && matchesPrice;
-  });
+  const nextAvailableChips = useMemo(() => {
+    const labelToDateKey = new Map<string, string>();
+    filteredListings.forEach((listing) => {
+      if (!listing?.nextAvailableDate) return;
+      const date = new Date(listing.nextAvailableDate);
+      if (Number.isNaN(date.getTime())) return;
+      const dateKey = date.toISOString().slice(0, 10);
+      const label = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      if (!labelToDateKey.has(label)) {
+        labelToDateKey.set(label, dateKey);
+      }
+    });
+
+    return Array.from(labelToDateKey.entries())
+      .slice(0, 4)
+      .map(([label, dateKey]) => ({ label, dateKey }));
+  }, [filteredListings]);
+
+  const visibleListings = useMemo(() => {
+    if (!selectedNextAvailableDate) return filteredListings;
+    return filteredListings.filter((listing) => {
+      if (!listing?.nextAvailableDate) return false;
+      const date = new Date(listing.nextAvailableDate);
+      if (Number.isNaN(date.getTime())) return false;
+      return date.toISOString().slice(0, 10) === selectedNextAvailableDate;
+    });
+  }, [filteredListings, selectedNextAvailableDate]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const runSearch = async () => {
+      try {
+        setLoading(true);
+        const params: Record<string, any> = {
+          q: searchQuery || undefined,
+          category: selectedCategory !== 'all' ? selectedCategory : undefined,
+          minPrice: priceRange[0],
+          maxPrice: priceRange[1],
+        };
+
+        const res = await listingsAPI.search(params);
+        if (!isCancelled) {
+          setFilteredListings((res.data || []).map(toListing));
+        }
+      } catch (error) {
+        console.error('Search failed', error);
+        if (!isCancelled) setFilteredListings([]);
+      } finally {
+        if (!isCancelled) setLoading(false);
+      }
+    };
+
+    const timeout = setTimeout(runSearch, 250);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [searchQuery, selectedCategory, priceRange]);
 
   return (
     <div className="pb-20 md:pb-8">
@@ -55,7 +111,7 @@ export default function Search() {
           </div>
 
           {/* Active Filters */}
-          {(selectedCategory !== "all" || priceRange[0] > 0 || priceRange[1] < 100) && (
+          {(selectedCategory !== "all" || priceRange[0] > 0 || priceRange[1] < 100 || selectedNextAvailableDate) && (
             <div className="flex gap-2 mt-3 flex-wrap">
               {selectedCategory !== "all" && (
                 <div className="flex items-center gap-2 px-3 py-1 bg-[#2D6BE4]/10 text-[#2D6BE4] rounded-full text-sm">
@@ -73,6 +129,14 @@ export default function Search() {
                   </button>
                 </div>
               )}
+              {selectedNextAvailableDate && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-[#4B5563]/10 text-[#4B5563] rounded-full text-sm">
+                  Next available: {new Date(selectedNextAvailableDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  <button onClick={() => setSelectedNextAvailableDate(null)}>
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -82,13 +146,34 @@ export default function Search() {
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="mb-4">
           <p className="text-[#4B5563]">
-            {filteredListings.length} {filteredListings.length === 1 ? "result" : "results"} found
+            {loading ? 'Searching... ' : ''}
+            {visibleListings.length} {visibleListings.length === 1 ? "result" : "results"} found
           </p>
+
+          {nextAvailableChips.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              <span className="text-xs text-[#4B5563] self-center">Next available:</span>
+              {nextAvailableChips.map((chip) => (
+                <button
+                  key={chip.dateKey}
+                  type="button"
+                  onClick={() => setSelectedNextAvailableDate((prev) => prev === chip.dateKey ? null : chip.dateKey)}
+                  className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] transition-colors ${
+                    selectedNextAvailableDate === chip.dateKey
+                      ? 'bg-[#4B5563] text-white'
+                      : 'bg-[#4B5563]/10 text-[#4B5563] hover:bg-[#4B5563]/20'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         
-        {filteredListings.length > 0 ? (
+        {visibleListings.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredListings.map((listing) => (
+            {visibleListings.map((listing) => (
               <ListingCard key={listing.id} listing={listing} />
             ))}
           </div>
@@ -114,6 +199,9 @@ export default function Search() {
               <Dialog.Title className="text-2xl text-[#111827]" style={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}>
                 Filters
               </Dialog.Title>
+              <Dialog.Description className="sr-only">
+                Adjust category and price range filters to refine listing search results.
+              </Dialog.Description>
               <Dialog.Close className="p-2 hover:bg-[#F3F4F6] rounded-lg transition-colors">
                 <X className="w-5 h-5 text-[#4B5563]" />
               </Dialog.Close>
