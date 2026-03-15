@@ -3,6 +3,14 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+function normalizeImageArray(images = []) {
+  if (!Array.isArray(images)) return [];
+  return images
+    .filter((img) => typeof img === 'string')
+    .map((img) => img.trim())
+    .filter((img) => img && !img.startsWith('blob:'));
+}
+
 function buildListingWhere(query = {}) {
   const where = {};
 
@@ -141,6 +149,12 @@ exports.create = async (req, res, next) => {
       featured = false,
     } = req.body;
 
+    const uploadedImages = Array.isArray(req.files)
+      ? req.files.map((file) => file.location || file.path).filter(Boolean)
+      : [];
+    const normalizedBodyImages = normalizeImageArray(images);
+    const finalImages = uploadedImages.length ? uploadedImages : normalizedBodyImages;
+
     // TODO: Uncomment after running: npx prisma migrate dev
     const listing = await prisma.listing.create({
       data: {
@@ -149,7 +163,7 @@ exports.create = async (req, res, next) => {
         category,
         condition,
         pricePerDay: Number(pricePerDay),
-        images,
+        images: finalImages,
         location,
         available: Boolean(available),
         featured: Boolean(featured),
@@ -184,6 +198,17 @@ exports.update = async (req, res, next) => {
       if (req.body[field] !== undefined) updateData[field] = req.body[field];
     }
     if (req.body.pricePerDay !== undefined) updateData.pricePerDay = Number(req.body.pricePerDay);
+
+    if (updateData.images !== undefined) {
+      updateData.images = normalizeImageArray(updateData.images);
+    }
+
+    const uploadedImages = Array.isArray(req.files)
+      ? req.files.map((file) => file.location || file.path).filter(Boolean)
+      : [];
+    if (uploadedImages.length) {
+      updateData.images = uploadedImages;
+    }
 
     if (!Object.keys(updateData).length) {
       return res.status(400).json({ error: 'Provide at least one field to update' });
