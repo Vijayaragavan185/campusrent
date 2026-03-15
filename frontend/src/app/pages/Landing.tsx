@@ -33,12 +33,20 @@ export default function Landing() {
             CampusRent
           </span>
         </div>
-        <Link
-          to="/signup"
-          className="px-6 py-2 bg-[#2D6BE4] text-white rounded-lg hover:bg-[#2557b8] transition-colors"
-        >
-          Sign Up
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/login"
+            className="px-6 py-2 border border-[#2D6BE4] text-[#2D6BE4] rounded-lg hover:bg-[#2D6BE4]/5 transition-colors"
+          >
+            Log In
+          </Link>
+          <Link
+            to="/signup"
+            className="px-6 py-2 bg-[#2D6BE4] text-white rounded-lg hover:bg-[#2557b8] transition-colors"
+          >
+            Sign Up
+          </Link>
+        </div>
       </header>
 
       {/* Hero Section */}
