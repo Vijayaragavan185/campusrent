@@ -1,26 +1,32 @@
 import { Link } from "react-router";
+import { useNavigate } from "react-router";
 import { ArrowLeft, User, Bell, Lock, CreditCard, HelpCircle, LogOut } from "lucide-react";
+import { useAuthStore } from "../../store/authStore";
 
 export default function Settings() {
+  const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
   const settingsSections = [
     {
       title: "Account",
       items: [
-        { icon: User, label: "Edit Profile", description: "Update your personal information" },
-        { icon: Bell, label: "Notifications", description: "Manage your notification preferences" },
-        { icon: Lock, label: "Privacy & Security", description: "Control your privacy settings" }
+        { icon: User, label: "Edit Profile", description: "Coming soon", disabled: true },
+        { icon: Bell, label: "Notifications", description: "Coming soon", disabled: true },
+        { icon: Lock, label: "Privacy & Security", description: "Coming soon", disabled: true }
       ]
     },
     {
       title: "Payment",
       items: [
-        { icon: CreditCard, label: "Payment Methods", description: "Manage your payment options" }
+        { icon: CreditCard, label: "Payment Methods", description: "Coming soon", disabled: true }
       ]
     },
     {
       title: "Support",
       items: [
-        { icon: HelpCircle, label: "Help & Support", description: "Get help or contact support" }
+        { icon: HelpCircle, label: "Help & Support", description: "Coming soon", disabled: true }
       ]
     }
   ];
@@ -30,7 +36,7 @@ export default function Settings() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4 max-w-4xl">
-          <Link to="/profile/1" className="inline-flex items-center gap-2 text-[#4B5563] hover:text-[#2D6BE4] transition-colors mb-3">
+          <Link to="/home" className="inline-flex items-center gap-2 text-[#4B5563] hover:text-[#2D6BE4] transition-colors mb-3">
             <ArrowLeft className="w-5 h-5" />
             Back
           </Link>
@@ -53,7 +59,8 @@ export default function Settings() {
                 return (
                   <button
                     key={itemIndex}
-                    className="w-full flex items-center gap-4 p-4 hover:bg-[#F3F4F6] transition-colors border-b border-gray-100 last:border-b-0"
+                    disabled={item.disabled}
+                    className="w-full flex items-center gap-4 p-4 hover:bg-[#F3F4F6] transition-colors border-b border-gray-100 last:border-b-0 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <div className="w-10 h-10 bg-[#2D6BE4]/10 rounded-lg flex items-center justify-center">
                       <Icon className="w-5 h-5 text-[#2D6BE4]" />
@@ -76,18 +83,22 @@ export default function Settings() {
 
         {/* Sign Out */}
         <div className="bg-white rounded-xl">
-          <Link to="/">
-            <button className="w-full flex items-center gap-4 p-4 hover:bg-red-50 transition-colors">
-              <div className="w-10 h-10 bg-[#E74C3C]/10 rounded-lg flex items-center justify-center">
-                <LogOut className="w-5 h-5 text-[#E74C3C]" />
+          <button
+            className="w-full flex items-center gap-4 p-4 hover:bg-red-50 transition-colors"
+            onClick={() => {
+              logout();
+              navigate('/');
+            }}
+          >
+            <div className="w-10 h-10 bg-[#E74C3C]/10 rounded-lg flex items-center justify-center">
+              <LogOut className="w-5 h-5 text-[#E74C3C]" />
+            </div>
+            <div className="flex-1 text-left">
+              <div className="text-[#E74C3C]" style={{ fontFamily: 'var(--font-display)', fontWeight: 600 }}>
+                Sign Out
               </div>
-              <div className="flex-1 text-left">
-                <div className="text-[#E74C3C]" style={{ fontFamily: 'var(--font-display)', fontWeight: 600 }}>
-                  Sign Out
-                </div>
-              </div>
-            </button>
-          </Link>
+            </div>
+          </button>
         </div>
 
         {/* App Info */}
