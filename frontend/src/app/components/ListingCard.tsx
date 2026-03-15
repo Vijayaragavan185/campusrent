@@ -13,6 +13,12 @@ export default function ListingCard({ listing }: ListingCardProps) {
     pending: "bg-[#F4A623] text-white"
   };
 
+  const badgeLabel = listing.availabilityLabel || listing.status;
+  const badgeColorClass = listing.status === 'rented' ? statusColors.rented : statusColors.available;
+  const nextDateLabel = listing.nextAvailableDate
+    ? new Date(listing.nextAvailableDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : null;
+
   return (
     <Link to={`/listing/${listing.id}`}>
       <div className={`bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow ${listing.featured ? 'ring-2 ring-[#F4A623]' : ''}`}>
@@ -23,8 +29,8 @@ export default function ListingCard({ listing }: ListingCardProps) {
             className="w-full h-full object-cover"
           />
           <div className="absolute top-3 right-3">
-            <span className={`px-3 py-1 rounded-full text-xs ${statusColors[listing.status]} capitalize`}>
-              {listing.status}
+            <span className={`px-3 py-1 rounded-full text-xs ${badgeColorClass}`}>
+              {badgeLabel}
             </span>
           </div>
           {listing.featured && (
@@ -53,6 +59,14 @@ export default function ListingCard({ listing }: ListingCardProps) {
             <MapPin className="w-4 h-4" />
             <span className="line-clamp-1">{listing.pickupLocation}</span>
           </div>
+
+          {listing.status === 'rented' && nextDateLabel && (
+            <div className="mb-3">
+              <span className="inline-flex items-center px-2 py-1 rounded-md text-[11px] bg-[#4B5563]/10 text-[#4B5563]">
+                Next available: {nextDateLabel}
+              </span>
+            </div>
+          )}
           
           <div className="flex items-center justify-between">
             <div>
