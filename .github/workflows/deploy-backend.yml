@@ -1,27 +1,53 @@
 # .github/workflows/deploy-backend.yml
 name: Deploy Backend
- 
+
 on:
   push:
     branches: [main]
-    paths: ['backend/**']   # Only runs when backend files change
- 
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend-main
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
- 
-      - name: SSH into EC2 and deploy
-        uses: appleboy/ssh-action@master
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Deploy backend to EC2 over SSH
+        uses: appleboy/ssh-action@v1.2.0
         with:
-          host:     ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.EC2_HOST }}
           username: ubuntu
-          key:      ${{ secrets.EC2_SSH_KEY }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
           script: |
-            cd /home/ubuntu/campusrent/backend
-            git pull origin main
+            set -e
+
+            cd /home/ubuntu/campusrent
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+
+            cd backend
             npm install --omit=dev
-            npx prisma migrate deploy
             npx prisma generate
-            pm2 restart campusrent-api
+            npx prisma migrate deploy
+
+            if pm2 describe campusrent-backend > /dev/null; then
+              pm2 restart campusrent-backend --update-env
+            else
+              pm2 start ecosystem.config.cjs --env production
+            fi
+
+            pm2 save
