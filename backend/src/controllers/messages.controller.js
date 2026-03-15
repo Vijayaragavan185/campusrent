@@ -40,7 +40,53 @@ exports.getConversations = async (req, res, next) => {
       latestByConversation.push(message);
     }
 
-    res.json(latestByConversation);
+    // TODO: Uncomment after running: npx prisma migrate dev
+    const conversationSummaries = await Promise.all(
+      latestByConversation.map(async (message) => {
+        const [firstUserId, secondUserId, listingId] = message.conversationId.split('_');
+        const otherUserId = firstUserId === req.userId ? secondUserId : firstUserId;
+
+        const [otherUser, listing] = await Promise.all([
+          prisma.user.findUnique({
+            where: { id: otherUserId },
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+              department: true,
+              verified: true,
+            },
+          }),
+          prisma.listing.findUnique({
+            where: { id: listingId },
+            select: {
+              id: true,
+              title: true,
+              images: true,
+              pricePerDay: true,
+            },
+          }),
+        ]);
+
+        return {
+          id: message.conversationId,
+          conversationId: message.conversationId,
+          listingId,
+          listing,
+          otherUser,
+          lastMessage: {
+            id: message.id,
+            content: message.content,
+            senderId: message.senderId,
+            createdAt: message.createdAt,
+          },
+          unreadCount: 0,
+          updatedAt: message.createdAt,
+        };
+      })
+    );
+
+    res.json(conversationSummaries.filter((c) => c.otherUser && c.listing));
   } catch (err) { next(err); }
 };
 
