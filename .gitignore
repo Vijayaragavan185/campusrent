@@ -1,9 +1,27 @@
 node_modules/
+**/node_modules/
+
+# Environment files (keep examples)
 .env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
 dist/
-.DS_Store
-*.pem
-*.key
 coverage/
 .nyc_output/
-prisma/migrations/  
+.DS_Store
+
+# Sensitive keys
+*.pem
+*.key
+
+# Local helper scripts / docs not needed in repo
+start-dev.ps1
+frontend/ATTRIBUTIONS.md
+frontend/project-structure.txt
+frontend/guidelines/Guidelines.md
+frontend/src/imports/pasted_text/campusrent-figma-prompt.md
+aws-integration-guide.md
