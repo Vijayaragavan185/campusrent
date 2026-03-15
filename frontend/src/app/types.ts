@@ -1,5 +1,5 @@
 export type ListingStatus = "available" | "rented" | "pending";
-export type BookingStatus = "pending" | "active" | "completed" | "cancelled";
+export type BookingStatus = "pending" | "active" | "requested_return" | "returned" | "completed" | "cancelled";
 export type Category = "all" | "electronics" | "books" | "clothing" | "sports" | "tools" | "other";
 export type Condition = "new" | "good" | "fair";
 
@@ -33,6 +33,8 @@ export interface Listing {
   reviewCount: number;
   featured?: boolean;
   blockedDates?: string[];
+  nextAvailableDate?: string | null;
+  availabilityLabel?: string;
 }
 
 export interface Booking {
@@ -45,6 +47,26 @@ export interface Booking {
   endDate: string;
   totalPrice: number;
   status: BookingStatus;
+  daysRemaining?: number | null;
+  isOverdue?: boolean;
+  lifecycleStatus?: string;
+  extensionStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  extensionRequestedEndDate?: string | null;
+  extensionRequestedAt?: string | null;
+  extensionResolvedAt?: string | null;
+  lateFeePerDay?: number;
+  lateFeeAccrued?: number;
+  potentialLateFee?: number;
+  reminderSentAt?: string | null;
+  statusEvents?: Array<{
+    id: string;
+    fromStatus?: string | null;
+    toStatus: string;
+    action: string;
+    actorId?: string | null;
+    metadata?: Record<string, any> | null;
+    createdAt: string;
+  }>;
   createdAt: string;
 }
 
