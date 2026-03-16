@@ -5,6 +5,44 @@ const { validationResult } = require('express-validator');
 const { sendOtpEmail } = require('../services/email.service');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+
+function getValidationError(req) {
+  const errors = validationResult(req);
+  if (errors.isEmpty()) return null;
+
+  const firstError = errors.array()[0];
+  const err = new Error(firstError?.msg || 'Invalid request.');
+  err.status = 400;
+  return err;
+}
+
+function mapEmailDeliveryError(error) {
+  const rawMessage = error?.message || '';
+  const errorName = error?.name || '';
+  const combined = `${errorName} ${rawMessage}`.toLowerCase();
+
+  if (combined.includes('email address is not verified') || combined.includes('message rejected')) {
+    const friendly = new Error('We could not send the verification email yet. Our email sender is not fully verified in AWS SES. Please try again later or contact support.');
+    friendly.status = 503;
+    return friendly;
+  }
+
+  if (combined.includes('sandbox')) {
+    const friendly = new Error('Email delivery is still in AWS SES sandbox mode. Verification emails can currently be sent only to approved addresses.');
+    friendly.status = 503;
+    return friendly;
+  }
+
+  if (combined.includes('credentials') || combined.includes('access key') || combined.includes('secret access key')) {
+    const friendly = new Error('Email service is temporarily unavailable due to a server email configuration issue. Please try again later.');
+    friendly.status = 503;
+    return friendly;
+  }
+
+  const friendly = new Error('We could not send the verification email right now. Please try again in a few minutes.');
+  friendly.status = 503;
+  return friendly;
+}
  
 function isUniversityEmail(email) {
   return (
@@ -25,13 +63,20 @@ function signToken(userId) {
 // POST /api/auth/register  — validates email, creates OTP, emails it
 exports.register = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const validationError = getValidationError(req);
+    if (validationError) return next(validationError);
  
     const { email } = req.body;
     if (!isUniversityEmail(email)) {
       return res.status(400).json({
         error: 'Please use your university email (.edu or .ac.in)',
+      });
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser?.verified) {
+      return res.status(409).json({
+        error: 'An account with this email already exists. Please log in instead.',
       });
     }
  
@@ -41,7 +86,12 @@ exports.register = async (req, res, next) => {
     // TODO: Uncomment after running: npx prisma migrate dev
     await prisma.otpCode.create({ data: { email, code: otp, expiresAt } });
  
-    await sendOtpEmail(email, otp);
+    try {
+      await sendOtpEmail(email, otp);
+    } catch (emailError) {
+      return next(mapEmailDeliveryError(emailError));
+    }
+
     res.json({ message: 'Verification code sent to your university email.' });
   } catch (err) { next(err); }
 };
@@ -49,8 +99,8 @@ exports.register = async (req, res, next) => {
 // POST /api/auth/verify-otp  — validates OTP, creates user, returns JWT
 exports.verifyOtp = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const validationError = getValidationError(req);
+    if (validationError) return next(validationError);
  
     const { email, otp, name, password } = req.body;
  
@@ -58,7 +108,11 @@ exports.verifyOtp = async (req, res, next) => {
     const record = await prisma.otpCode.findFirst({
       where: { email, code: otp, used: false, expiresAt: { gt: new Date() } },
     });
-    if (!record) return res.status(400).json({ error: 'Invalid or expired code.' });
+    if (!record) {
+      return res.status(400).json({
+        error: 'That verification code is invalid or expired. Please request a new code and try again.',
+      });
+    }
  
     const hashedPassword = await bcrypt.hash(password, 12);
  
@@ -77,8 +131,8 @@ exports.verifyOtp = async (req, res, next) => {
 // POST /api/auth/login
 exports.login = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const validationError = getValidationError(req);
+    if (validationError) return next(validationError);
  
     const { email, password } = req.body;
  

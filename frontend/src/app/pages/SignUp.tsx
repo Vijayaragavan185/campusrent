@@ -6,6 +6,20 @@ import { toast } from "sonner";
 import { authAPI } from "../../services/api";
 import { useAuthStore } from "../../store/authStore";
 
+function getAuthErrorMessage(err: any, fallback: string) {
+  const data = err?.response?.data;
+
+  if (data?.error && typeof data.error === 'string') {
+    return data.error;
+  }
+
+  if (Array.isArray(data?.errors) && data.errors.length > 0) {
+    return data.errors[0]?.msg || fallback;
+  }
+
+  return fallback;
+}
+
 export default function SignUp() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -24,6 +38,7 @@ export default function SignUp() {
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     
     if (!email.includes("@")) {
       setError("Please use a valid university email");
@@ -34,10 +49,13 @@ export default function SignUp() {
       setLoading(true);
       await authAPI.register(email);
       setError("");
+      setOtp("");
+      setName("");
+      setPassword("");
       setStep(2);
       toast.success('Verification code sent to your email');
     } catch (err: any) {
-      const message = err?.response?.data?.error || 'Failed to send verification code';
+      const message = getAuthErrorMessage(err, 'Failed to send verification code');
       setError(message);
     } finally {
       setLoading(false);
@@ -45,6 +63,7 @@ export default function SignUp() {
   };
 
   const handleVerificationComplete = async () => {
+    setError("");
     if (!otp || !name || !password) {
       setError('Please fill OTP, name, and password');
       return;
@@ -57,7 +76,7 @@ export default function SignUp() {
       toast.success('Account verified! Welcome to CampusRent');
       navigate("/home");
     } catch (err: any) {
-      const message = err?.response?.data?.error || 'Verification failed';
+      const message = getAuthErrorMessage(err, 'Verification failed');
       setError(message);
     } finally {
       setLoading(false);
@@ -67,10 +86,11 @@ export default function SignUp() {
   const handleResend = async () => {
     try {
       setLoading(true);
+      setError("");
       await authAPI.register(email);
       toast.success('Verification code resent');
     } catch (err: any) {
-      const message = err?.response?.data?.error || 'Failed to resend verification code';
+      const message = getAuthErrorMessage(err, 'Failed to resend verification code');
       setError(message);
     } finally {
       setLoading(false);
@@ -128,6 +148,9 @@ export default function SignUp() {
                 )}
                 <p className="text-[#4B5563] text-sm mt-2">
                   Must be a valid .edu email address
+                </p>
+                <p className="text-[#4B5563] text-sm mt-1">
+                  Already registered? Use <Link to="/login" className="text-[#2D6BE4] hover:underline">Log in</Link> instead.
                 </p>
               </div>
 
@@ -202,6 +225,9 @@ export default function SignUp() {
                   >
                     resend email
                   </button>
+                </p>
+                <p className="text-sm text-[#4B5563] mt-2">
+                  If email sending is temporarily unavailable, you will see a clear message here.
                 </p>
               </div>
 
