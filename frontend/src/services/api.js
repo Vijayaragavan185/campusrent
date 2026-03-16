@@ -1,6 +1,8 @@
 // frontend/src/services/api.js
 import axios from 'axios';
 
+const AUTH_ERROR_BYPASS_PATHS = ['/auth/login', '/auth/register', '/auth/verify-otp'];
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
   withCredentials: true,
@@ -21,9 +23,13 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const requestUrl = err.config?.url || '';
+    const isAuthFlowRequest = AUTH_ERROR_BYPASS_PATHS.some((path) => requestUrl.includes(path));
+    const stored = localStorage.getItem('campusrent-auth');
+
+    if (err.response?.status === 401 && stored && !isAuthFlowRequest) {
       localStorage.removeItem('campusrent-auth');
-      window.location.href = '/';
+      window.location.href = '/login';
     }
     return Promise.reject(err);
   }
