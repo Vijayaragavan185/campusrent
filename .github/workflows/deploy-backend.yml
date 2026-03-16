@@ -1,4 +1,3 @@
-# .github/workflows/deploy-backend.yml
 name: Deploy Backend
 
 on:
@@ -22,7 +21,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Deploy backend to EC2 over SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -37,10 +36,11 @@ jobs:
             cd /home/ubuntu/campusrent
             git fetch origin main
             git checkout main
+            git clean -fd
             git reset --hard origin/main
 
             cd backend
-            npm install
+            npm install --omit=dev
             npx prisma generate
             npx prisma migrate deploy
 
