@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Deploy backend to EC2 over SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -40,11 +40,11 @@ jobs:
             git reset --hard origin/main
 
             cd backend
-            npm install --omit=dev
+            npm install
             npx prisma generate
             npx prisma migrate deploy
 
-            if pm2 describe campusrent-backend > /dev/null; then
+            if pm2 describe campusrent-backend > /dev/null 2>&1; then
               pm2 restart campusrent-backend --update-env
             else
               pm2 start ecosystem.config.cjs --env production
