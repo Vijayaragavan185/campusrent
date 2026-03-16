@@ -5,6 +5,20 @@ import { toast } from "sonner";
 import { authAPI } from "../../services/api";
 import { useAuthStore } from "../../store/authStore";
 
+function getLoginErrorMessage(err: any) {
+  const data = err?.response?.data;
+
+  if (data?.error && typeof data.error === 'string') {
+    return data.error;
+  }
+
+  if (Array.isArray(data?.errors) && data.errors.length > 0) {
+    return data.errors[0]?.msg || 'Login failed';
+  }
+
+  return 'Login failed';
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -21,6 +35,8 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
     if (!email || !password) {
       setError('Please enter email and password');
       return;
@@ -34,12 +50,14 @@ export default function Login() {
       toast.success('Welcome back!');
       navigate('/home');
     } catch (err: any) {
-      const message = err?.response?.data?.error || 'Login failed';
+      const message = getLoginErrorMessage(err);
       setError(message);
     } finally {
       setLoading(false);
     }
   };
+
+  const showSignupHint = error.toLowerCase().includes('sign up');
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-[#F3F4F6] flex items-center justify-center p-4">
@@ -91,7 +109,19 @@ export default function Login() {
               </div>
             </div>
 
-            {error && <p className="text-[#E74C3C] text-sm">{error}</p>}
+            {error && (
+              <div className="space-y-2">
+                <p className="text-[#E74C3C] text-sm">{error}</p>
+                {showSignupHint && (
+                  <p className="text-sm text-[#4B5563]">
+                    Need an account?{' '}
+                    <Link to="/signup" className="text-[#2D6BE4] hover:underline">
+                      Create one here
+                    </Link>
+                  </p>
+                )}
+              </div>
+            )}
 
             <button
               type="submit"

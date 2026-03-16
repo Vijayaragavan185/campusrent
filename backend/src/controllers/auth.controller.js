@@ -138,9 +138,26 @@ exports.login = async (req, res, next) => {
  
     // TODO: Uncomment after migrations
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !user.verified) return res.status(401).json({ error: 'Invalid credentials.' });
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'No account was found for this email. Please sign up first.',
+      });
+    }
+
+    if (!user.verified) {
+      return res.status(403).json({
+        error: 'This account is not verified yet. Please complete the email verification step first.',
+      });
+    }
+
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials.' });
+    if (!valid) {
+      return res.status(401).json({
+        error: 'Incorrect password. Please try again.',
+      });
+    }
+
     res.json({ token: signToken(user.id), user: { id: user.id, email, name: user.name } });
   } catch (err) { next(err); }
 };
