@@ -594,6 +594,68 @@ exports.getOne = async (req, res, next) => {
 };
 
 // PUT /api/bookings/:id/status
+// Auto-payout helper: called (fire-and-forget) when a booking is marked completed.
+async function triggerLenderPayoutOnCompletion(bookingId, listing) {
+  const { sendPayoutToUpi } = require('../services/payout.service');
+
+  const payment = await prisma.payment.findUnique({
+    where: { bookingId },
+    select: { status: true, amount: true },
+  });
+
+  if (!payment || payment.status !== 'paid') {
+    console.log(`[payout] Booking ${bookingId}: no paid payment found, skipping payout.`);
+    return;
+  }
+
+  const lender = await prisma.user.findUnique({
+    where: { id: listing.ownerId },
+    select: { id: true, name: true, payoutUpiId: true },
+  });
+
+  if (!lender?.payoutUpiId) {
+    console.log(`[payout] Lender ${lender?.id} has no UPI ID set, skipping payout.`);
+    return;
+  }
+
+  const amountInPaise = Math.round(payment.amount * 100);
+
+  const payoutRecord = await prisma.payout.create({
+    data: {
+      bookingId,
+      lenderId: lender.id,
+      upiId: lender.payoutUpiId,
+      amountInPaise,
+      status: 'pending',
+    },
+  });
+
+  try {
+    const result = await sendPayoutToUpi({
+      upiId: lender.payoutUpiId,
+      lenderName: lender.name,
+      amountInPaise,
+      bookingId,
+    });
+
+    await prisma.payout.update({
+      where: { id: payoutRecord.id },
+      data: { razorpayPayoutId: result.id, status: result.status || 'processing' },
+    });
+
+    console.log(`[payout] Payout ${result.id} initiated for booking ${bookingId}`);
+  } catch (err) {
+    await prisma.payout.update({
+      where: { id: payoutRecord.id },
+      data: {
+        status: 'failed',
+        failureReason: err?.response?.data?.error?.description || err.message || 'Unknown error',
+      },
+    });
+    throw err;
+  }
+}
+
 exports.updateStatus = async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -712,6 +774,13 @@ exports.updateStatus = async (req, res, next) => {
         byRole: isOwner ? 'owner' : 'renter',
       },
     });
+
+    // Fire-and-forget: auto-pay lender when booking completes.
+    if (status === 'completed') {
+      triggerLenderPayoutOnCompletion(booking.id, booking.listing).catch((err) => {
+        console.error('[payout] Auto-payout failed for booking', booking.id, err?.message || err);
+      });
+    }
 
     res.json(decorateBooking(updatedBooking));
   } catch (err) { next(err); }
