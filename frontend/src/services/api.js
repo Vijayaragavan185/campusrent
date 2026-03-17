@@ -74,6 +74,7 @@ export const messagesAPI = {
 export const usersAPI = {
   getProfile:    (id) => api.get(`/users/${id}`),
   updateProfile: (d)  => api.put('/users/me', d),
+  savePayout:    (upiId) => api.put('/users/me/payout', { upiId }),
 };
 
 export const reviewsAPI = {
