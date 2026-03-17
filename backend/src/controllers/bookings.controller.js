@@ -688,6 +688,8 @@ async function triggerLenderPayoutOnCompletion(bookingId, listing) {
       lenderId: lender.id,
       upiId: lender.payoutUpiId,
       amountInPaise,
+      step: err?.razorpayXStep,
+      url: err?.razorpayXUrl,
       status: err?.response?.status,
       error: err?.response?.data || err.message || err,
     });

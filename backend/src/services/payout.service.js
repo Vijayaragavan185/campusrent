@@ -2,6 +2,21 @@
 // Razorpay X Payouts API — automatically pays lenders via UPI on booking completion.
 const axios = require('axios');
 
+async function razorpayXPost(url, data, step) {
+  try {
+    const res = await axios.post(url, data, {
+      headers: { Authorization: getRazorpayAuthHeader() },
+      timeout: 15000,
+    });
+    return res.data;
+  } catch (err) {
+    err.razorpayXStep = step;
+    err.razorpayXUrl = url;
+    err.razorpayXPayload = data;
+    throw err;
+  }
+}
+
 function getRazorpayAuthHeader() {
   const credentials = Buffer.from(
     `${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`
@@ -10,29 +25,29 @@ function getRazorpayAuthHeader() {
 }
 
 async function createContact(name, referenceId) {
-  const res = await axios.post(
+  const data = await razorpayXPost(
     'https://api.razorpay.com/v1/contacts',
     { name, type: 'vendor', reference_id: referenceId },
-    { headers: { Authorization: getRazorpayAuthHeader() } }
+    'create_contact'
   );
-  return res.data.id;
+  return data.id;
 }
 
 async function createFundAccount(contactId, upiId) {
-  const res = await axios.post(
+  const data = await razorpayXPost(
     'https://api.razorpay.com/v1/fund_accounts',
     {
       contact_id: contactId,
       account_type: 'vpa',
       vpa: { address: upiId },
     },
-    { headers: { Authorization: getRazorpayAuthHeader() } }
+    'create_fund_account'
   );
-  return res.data.id;
+  return data.id;
 }
 
 async function createRazorpayPayout({ fundAccountId, amountInPaise, bookingId }) {
-  const res = await axios.post(
+  return razorpayXPost(
     'https://api.razorpay.com/v1/payouts',
     {
       account_number: process.env.RAZORPAY_X_ACCOUNT_NUMBER,
@@ -45,9 +60,8 @@ async function createRazorpayPayout({ fundAccountId, amountInPaise, bookingId })
       reference_id: bookingId,
       narration: 'CampusRent rental payout',
     },
-    { headers: { Authorization: getRazorpayAuthHeader() } }
+    'create_payout'
   );
-  return res.data;
 }
 
 /**
