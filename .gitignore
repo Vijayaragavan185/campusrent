@@ -6,6 +6,9 @@ node_modules/
 .env.*
 **/.env
 **/.env.*
+frontend/.env.local
+backend/.env.local
+backend/.env
 !.env.example
 !**/.env.example
 
@@ -25,3 +28,6 @@ frontend/project-structure.txt
 frontend/guidelines/Guidelines.md
 frontend/src/imports/pasted_text/campusrent-figma-prompt.md
 aws-integration-guide.md
+RAZORPAY_DET/
+razorpay-secrets.txt
+
