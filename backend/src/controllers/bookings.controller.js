@@ -88,6 +88,7 @@ function decorateBooking(booking) {
     lateFeeAccrued,
     potentialLateFee: Math.max(lateFeeAccrued, calculateLateFee(booking)),
     extensionStatus: EXTENSION_STATUSES.includes(booking.extensionStatus) ? booking.extensionStatus : 'none',
+    paymentStatus: booking.payment?.status || null,
   };
 }
 
@@ -448,6 +449,7 @@ exports.getMy = async (req, res, next) => {
             },
           },
         },
+        payment: { select: { status: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -464,6 +466,7 @@ exports.getMy = async (req, res, next) => {
             },
           },
         },
+        payment: { select: { status: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -519,6 +522,7 @@ exports.getLending = async (req, res, next) => {
         renter: {
           select: { id: true, name: true, avatar: true, verified: true, email: true },
         },
+        payment: { select: { status: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

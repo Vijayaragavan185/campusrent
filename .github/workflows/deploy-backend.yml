@@ -40,6 +40,12 @@ jobs:
             git reset --hard origin/main
 
             cd backend
+
+            # Recreate backend .env from GitHub Actions secret on every deploy.
+            cat > .env << 'EOF_ENV'
+            ${{ secrets.BACKEND_ENV_FILE }}
+            EOF_ENV
+
             npm install --omit=dev
             npx prisma generate
             npx prisma migrate deploy

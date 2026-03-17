@@ -45,6 +45,7 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_SOCKET_URL: ${{ secrets.VITE_SOCKET_URL }}
+          VITE_RAZORPAY_KEY_ID: ${{ secrets.VITE_RAZORPAY_KEY_ID }}
         run: |
           pnpm install --frozen-lockfile
           pnpm run build
