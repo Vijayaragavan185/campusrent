@@ -618,17 +618,40 @@ async function triggerLenderPayoutOnCompletion(bookingId, listing) {
     return;
   }
 
+  const existingPayout = await prisma.payout.findUnique({
+    where: { bookingId },
+    select: { id: true, status: true, razorpayPayoutId: true },
+  });
+
+  if (existingPayout && ['pending', 'processing', 'processed'].includes(existingPayout.status)) {
+    console.log(
+      `[payout] Booking ${bookingId}: payout already exists with status ${existingPayout.status}, skipping duplicate trigger.`
+    );
+    return;
+  }
+
   const amountInPaise = Math.round(payment.amount * 100);
 
-  const payoutRecord = await prisma.payout.create({
-    data: {
-      bookingId,
-      lenderId: lender.id,
-      upiId: lender.payoutUpiId,
-      amountInPaise,
-      status: 'pending',
-    },
-  });
+  const payoutRecord = existingPayout
+    ? await prisma.payout.update({
+        where: { id: existingPayout.id },
+        data: {
+          lenderId: lender.id,
+          upiId: lender.payoutUpiId,
+          amountInPaise,
+          status: 'pending',
+          failureReason: null,
+        },
+      })
+    : await prisma.payout.create({
+        data: {
+          bookingId,
+          lenderId: lender.id,
+          upiId: lender.payoutUpiId,
+          amountInPaise,
+          status: 'pending',
+        },
+      });
 
   try {
     const result = await sendPayoutToUpi({
@@ -645,13 +668,30 @@ async function triggerLenderPayoutOnCompletion(bookingId, listing) {
 
     console.log(`[payout] Payout ${result.id} initiated for booking ${bookingId}`);
   } catch (err) {
+    const failureReason = err?.response?.data?.error?.description
+      || err?.response?.data?.error?.reason
+      || err?.response?.data?.error?.field
+      || err?.response?.data?.message
+      || err.message
+      || 'Unknown error';
+
     await prisma.payout.update({
       where: { id: payoutRecord.id },
       data: {
         status: 'failed',
-        failureReason: err?.response?.data?.error?.description || err.message || 'Unknown error',
+        failureReason,
       },
     });
+
+    console.error('[payout] Razorpay X payout request failed', {
+      bookingId,
+      lenderId: lender.id,
+      upiId: lender.payoutUpiId,
+      amountInPaise,
+      status: err?.response?.status,
+      error: err?.response?.data || err.message || err,
+    });
+
     throw err;
   }
 }
