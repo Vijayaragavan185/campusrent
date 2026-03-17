@@ -25,10 +25,13 @@ jobs:
 
       - name: Deploy backend to EC2 over SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: BACKEND_ENV_FILE
           script_stop: true
           script: |
             set -e
@@ -46,24 +49,37 @@ jobs:
 
             cd backend
 
-            # Write backend .env from GitHub secret when provided.
-            if [ -n "${{ secrets.BACKEND_ENV_FILE }}" ]; then
-              cat > .env << 'EOF_ENV'
-            ${{ secrets.BACKEND_ENV_FILE }}
-            EOF_ENV
+            # Write .env using printf (single command — avoids drone-ssh injecting lines
+            # into heredoc content when script_stop: true is set).
+            if [ -n "$BACKEND_ENV_FILE" ]; then
+              printf '%s\n' "$BACKEND_ENV_FILE" > .env
+              sed -i 's/\r$//' .env
             fi
 
             # If secret was missing/invalid, fallback to previously saved EC2 .env.
             if [ ! -s .env ] || grep -q "RDS_ENDPOINT" .env; then
               if [ -f /tmp/campusrent_backend.env ]; then
                 cp /tmp/campusrent_backend.env .env
-                echo "Using existing EC2 backend/.env because BACKEND_ENV_FILE is missing or contains placeholders."
+                echo "Using existing EC2 backend/.env (BACKEND_ENV_FILE missing or has placeholders)."
               fi
             fi
 
+            DB_URL_LINE=$(grep '^DATABASE_URL=' .env || true)
+
             # Final safety check.
             if [ ! -s .env ]; then
-              echo "ERROR: No valid backend/.env found. Set BACKEND_ENV_FILE secret or create backend/.env on EC2."
+              echo "ERROR: No valid backend/.env found. Set BACKEND_ENV_FILE secret or create .env on EC2."
+              exit 1
+            fi
+
+            if [ -z "$DB_URL_LINE" ]; then
+              echo "ERROR: DATABASE_URL is missing in backend/.env"
+              exit 1
+            fi
+
+            if echo "$DB_URL_LINE" | grep -q 'RDS_ENDPOINT'; then
+              echo "ERROR: DATABASE_URL still contains placeholder RDS_ENDPOINT."
+              echo "Fix BACKEND_ENV_FILE secret with your actual RDS hostname."
               exit 1
             fi
 
