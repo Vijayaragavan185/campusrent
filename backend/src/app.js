@@ -7,6 +7,7 @@ const morgan     = require('morgan');
 const rateLimit  = require('express-rate-limit');
  
 const app = express();
+app.set('trust proxy', 1);
 
 // Trust the first proxy (nginx / ALB on EC2). Required for express-rate-limit
 // to read X-Forwarded-For correctly without throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
