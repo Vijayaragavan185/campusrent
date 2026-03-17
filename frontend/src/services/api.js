@@ -82,4 +82,9 @@ export const reviewsAPI = {
   create:        (d)   => api.post('/reviews', d),
 };
 
+export const paymentsAPI = {
+  createOrder: (bookingId) => api.post('/payments/create-order', { bookingId }),
+  verify:      (payload)   => api.post('/payments/verify', payload),
+};
+
 export default api;

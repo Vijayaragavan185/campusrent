@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Calendar, Star } from "lucide-react";
 import { toast } from "sonner";
 import * as Dialog from "@radix-ui/react-dialog";
-import { bookingsAPI, reviewsAPI } from "../../services/api";
+import { bookingsAPI, reviewsAPI, paymentsAPI } from "../../services/api";
 import { toBooking } from "../../services/normalizers";
 import { useAuthStore } from "../../store/authStore";
 
@@ -78,6 +78,7 @@ export default function MyBookings() {
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditBooking, setAuditBooking] = useState<any | null>(null);
   const [auditEvents, setAuditEvents] = useState<any[]>([]);
+  const [payingId, setPayingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const currentUser = useAuthStore((s) => s.user);
   const profilePath = currentUser?.id ? `/profile/${currentUser.id}` : '/signup';
@@ -250,8 +251,51 @@ export default function MyBookings() {
     }
   };
 
-  const submitReview = async () => {
-    if (!reviewTargetBooking?.listingId) return;
+  const handlePayNow = async (booking: any) => {
+    try {
+      setPayingId(booking.id);
+      const { data } = await paymentsAPI.createOrder(booking.id);
+
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: data.amount,
+        currency: data.currency,
+        name: 'CampusRent',
+        description: booking.listing?.title || 'Rental payment',
+        order_id: data.orderId,
+        handler: async (response: any) => {
+          try {
+            await paymentsAPI.verify({
+              bookingId: booking.id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            });
+            patchBookingLocally(booking.id, { paymentStatus: 'paid' });
+            toast.success('Payment successful!');
+          } catch {
+            toast.error('Payment verification failed. Contact support.');
+          }
+        },
+        prefill: {
+          name: currentUser?.name || '',
+          email: currentUser?.email || '',
+        },
+        theme: { color: '#2D6BE4' },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', () => toast.error('Payment failed. Please try again.'));
+      rzp.open();
+    } catch (error: any) {
+      const message = error?.response?.data?.error || 'Could not initiate payment';
+      toast.error(message);
+    } finally {
+      setPayingId(null);
+    }
+  };
+
+  const submitReview = async () => {    if (!reviewTargetBooking?.listingId) return;
     if (!reviewComment.trim()) {
       toast.error("Please add a short review comment");
       return;
@@ -451,6 +495,26 @@ export default function MyBookings() {
                     Audit Timeline
                   </button>
                 </div>
+
+                {activeTab === "renting" && booking.paymentStatus !== 'paid' && !['cancelled', 'rejected', 'completed'].includes(booking.status) && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => handlePayNow(booking)}
+                      disabled={payingId === booking.id}
+                      className="w-full py-2 bg-[#27AE60] text-white rounded-lg hover:bg-[#229954] transition-colors disabled:opacity-60 font-semibold"
+                    >
+                      {payingId === booking.id ? 'Opening Payment...' : `Pay ₹${Number(booking.totalPrice).toFixed(2)}`}
+                    </button>
+                  </div>
+                )}
+
+                {activeTab === "renting" && booking.paymentStatus === 'paid' && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="w-full py-2 bg-[#27AE60]/10 text-[#27AE60] rounded-lg text-center text-sm font-medium">
+                      ✓ Payment received
+                    </div>
+                  </div>
+                )}
 
                 {booking.status === "completed" && activeTab === "renting" && (
                   <div className="mt-4 pt-4 border-t border-gray-200">

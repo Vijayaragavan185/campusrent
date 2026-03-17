@@ -159,6 +159,7 @@ export function toBooking(raw: AnyObj = {}): AnyObj {
     lateFeeAccrued: Number(raw.lateFeeAccrued || 0),
     potentialLateFee: Number(raw.potentialLateFee || raw.lateFeeAccrued || 0),
     reminderSentAt: raw.reminderSentAt || null,
+    paymentStatus: raw.paymentStatus || null,
     statusEvents: safeArray(raw.statusEvents).map((event) => ({
       id: event.id,
       fromStatus: event.fromStatus ?? null,
