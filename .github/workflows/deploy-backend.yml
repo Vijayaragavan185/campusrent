@@ -46,6 +46,18 @@ jobs:
             ${{ secrets.BACKEND_ENV_FILE }}
             EOF_ENV
 
+            # Fail fast if secret is missing or still contains placeholders.
+            if [ ! -s .env ]; then
+              echo "ERROR: backend/.env was not created from BACKEND_ENV_FILE secret."
+              exit 1
+            fi
+
+            if grep -q "RDS_ENDPOINT" .env; then
+              echo "ERROR: BACKEND_ENV_FILE still contains placeholder RDS_ENDPOINT in DATABASE_URL."
+              echo "Update GitHub secret BACKEND_ENV_FILE with your actual RDS endpoint host."
+              exit 1
+            fi
+
             npm install --omit=dev
             npx prisma generate
             npx prisma migrate deploy
