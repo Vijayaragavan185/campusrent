@@ -79,3 +79,26 @@ exports.updateProfile = async (req, res, next) => {
     res.json(user);
   } catch (err) { next(err); }
 };
+
+// PUT /api/users/me/payout
+exports.updatePayoutDetails = async (req, res, next) => {
+  try {
+    const { upiId } = req.body;
+    if (!upiId || typeof upiId !== 'string' || !upiId.trim()) {
+      return res.status(400).json({ error: 'Valid UPI ID is required' });
+    }
+
+    const upiRegex = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$/;
+    if (!upiRegex.test(upiId.trim())) {
+      return res.status(400).json({ error: 'Invalid UPI ID format (e.g. yourname@okaxis)' });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: { payoutUpiId: upiId.trim() },
+      select: { id: true, payoutUpiId: true },
+    });
+
+    res.json({ success: true, payoutUpiId: user.payoutUpiId });
+  } catch (err) { next(err); }
+};

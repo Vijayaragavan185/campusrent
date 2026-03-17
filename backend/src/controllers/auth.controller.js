@@ -171,7 +171,7 @@ exports.getMe = async (req, res, next) => {
       select: {
         id: true, email: true, name: true, avatar: true,
         department: true, year: true, verified: true,
-        isLister: true, rating: true, createdAt: true
+        isLister: true, rating: true, payoutUpiId: true, createdAt: true
       },
     });
     if (!user) return res.status(404).json({ error: 'User not found' });

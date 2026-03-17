@@ -15,6 +15,10 @@ router.put('/me', authMW,
   ],
   users.updateProfile);
 
+router.put('/me/payout', authMW,
+  [body('upiId').trim().notEmpty().withMessage('UPI ID is required')],
+  users.updatePayoutDetails);
+
 router.get('/:id',
   [param('id').trim().notEmpty()],
   users.getProfile);
