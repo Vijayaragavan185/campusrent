@@ -95,6 +95,13 @@ app.use(rateLimit({
 }));
  
 // ── Body parsers ─────────────────────────────────────────
+// Webhook raw body capture - COMMENTED OUT, to be enabled later
+// app.use(express.json({
+//   limit: '10mb',
+//   verify: (req, _res, buf) => {
+//     req.rawBody = buf?.toString('utf8') || '';
+//   },
+// }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestSanitizer);
@@ -119,6 +126,7 @@ safeUse('/api/bookings', './routes/bookings.routes');
 safeUse('/api/messages', './routes/messages.routes');
 safeUse('/api/users',    './routes/users.routes');
 safeUse('/api/reviews',  './routes/reviews.routes');
+safeUse('/api/payments', './routes/payments.routes');
  
 // ── 404 for unknown routes ────────────────────────────────
 app.use((req, res) => {

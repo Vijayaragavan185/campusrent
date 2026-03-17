@@ -67,7 +67,22 @@ model Booking {
   returnedAt        DateTime?
   completedAt       DateTime?
   statusEvents      BookingStatusEvent[]
+  payment           Payment?
   createdAt         DateTime @default(now())
+}
+
+model Payment {
+  id                  String   @id @default(cuid())
+  bookingId           String   @unique
+  booking             Booking  @relation(fields: [bookingId], references: [id])
+  razorpayOrderId     String   @unique
+  razorpayPaymentId   String?
+  razorpaySignature   String?
+  amount              Float
+  currency            String   @default("INR")
+  status              String   @default("created") // created|paid|failed
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model BookingStatusEvent {
