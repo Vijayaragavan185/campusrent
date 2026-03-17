@@ -1,4 +1,4 @@
-# .github/workflows/deploy-frontend.yml
+# .github/workflows/deploy-frontend.yml.
 name: Deploy Frontend
 
 on:
