@@ -33,6 +33,11 @@ jobs:
           script: |
             set -e
 
+            # Preserve current backend env before git clean removes untracked files.
+            if [ -f /home/ubuntu/campusrent/backend/.env ]; then
+              cp /home/ubuntu/campusrent/backend/.env /tmp/campusrent_backend.env
+            fi
+
             cd /home/ubuntu/campusrent
             git fetch origin main
             git checkout main
@@ -41,20 +46,24 @@ jobs:
 
             cd backend
 
-            # Recreate backend .env from GitHub Actions secret on every deploy.
-            cat > .env << 'EOF_ENV'
+            # Write backend .env from GitHub secret when provided.
+            if [ -n "${{ secrets.BACKEND_ENV_FILE }}" ]; then
+              cat > .env << 'EOF_ENV'
             ${{ secrets.BACKEND_ENV_FILE }}
             EOF_ENV
-
-            # Fail fast if secret is missing or still contains placeholders.
-            if [ ! -s .env ]; then
-              echo "ERROR: backend/.env was not created from BACKEND_ENV_FILE secret."
-              exit 1
             fi
 
-            if grep -q "RDS_ENDPOINT" .env; then
-              echo "ERROR: BACKEND_ENV_FILE still contains placeholder RDS_ENDPOINT in DATABASE_URL."
-              echo "Update GitHub secret BACKEND_ENV_FILE with your actual RDS endpoint host."
+            # If secret was missing/invalid, fallback to previously saved EC2 .env.
+            if [ ! -s .env ] || grep -q "RDS_ENDPOINT" .env; then
+              if [ -f /tmp/campusrent_backend.env ]; then
+                cp /tmp/campusrent_backend.env .env
+                echo "Using existing EC2 backend/.env because BACKEND_ENV_FILE is missing or contains placeholders."
+              fi
+            fi
+
+            # Final safety check.
+            if [ ! -s .env ]; then
+              echo "ERROR: No valid backend/.env found. Set BACKEND_ENV_FILE secret or create backend/.env on EC2."
               exit 1
             fi
 
