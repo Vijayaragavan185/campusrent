@@ -10,6 +10,7 @@ import Chat from "./pages/Chat";
 import MyBookings from "./pages/MyBookings";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
+import AdminDashboard from "./pages/AdminDashboard";
 import Landing from "./pages/Landing";
 import SignUp from "./pages/SignUp";
 import Login from "./pages/Login";
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
       { path: "bookings", Component: MyBookings },
       { path: "profile/:id", Component: Profile },
       { path: "settings", Component: Settings },
+      { path: "admin", Component: AdminDashboard },
       { path: "*", Component: NotFound }
     ]
   }
