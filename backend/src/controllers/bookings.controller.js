@@ -318,6 +318,14 @@ exports.create = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
+    // Prevent admins from making bookings
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (user?.isAdmin) {
+      return res.status(403).json({
+        error: 'Admins cannot make bookings or rent items.',
+      });
+    }
+
     const { listingId, startDate, endDate, totalCost } = req.body;
     const start = new Date(startDate);
     const end = new Date(endDate);

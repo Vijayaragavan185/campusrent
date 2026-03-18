@@ -14,6 +14,9 @@ function normalizeImageArray(images = []) {
 function buildListingWhere(query = {}) {
   const where = {};
 
+  // Always exclude blocked listings from user searches
+  where.isBlocked = false;
+
   if (query.q) {
     where.OR = [
       { title:       { contains: query.q, mode: 'insensitive' } },
@@ -136,6 +139,14 @@ exports.create = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    // Prevent admins from creating listings
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (user?.isAdmin) {
+      return res.status(403).json({
+        error: 'Admins cannot create listings or rent items.',
+      });
+    }
 
     const {
       title,
