@@ -26,25 +26,29 @@ model User {
   bookings    Booking[] @relation("renter")
   messages    Message[]
   reviews     Review[]  @relation("reviewer")
+  notifications Notification[]
 }
  
 model Listing {
-  id          String    @id @default(cuid())
-  title       String
-  description String
-  category    String
-  condition   String    // 'New' | 'Good' | 'Fair'
-  pricePerDay Float
-  images      String[]  // Array of S3 URLs
-  location    String
-  available   Boolean   @default(true)
-  blockedDates String[] @default([])
-  featured    Boolean   @default(false)
-  ownerId     String
-  owner       User      @relation(fields: [ownerId], references: [id])
-  bookings    Booking[]
-  reviews     Review[]
-  createdAt   DateTime  @default(now())
+  id            String    @id @default(cuid())
+  title         String
+  description   String
+  category      String
+  condition     String    // 'New' | 'Good' | 'Fair'
+  pricePerDay   Float
+  images        String[]  // Array of S3 URLs
+  location      String
+  available     Boolean   @default(true)
+  blockedDates  String[]  @default([])
+  featured      Boolean   @default(false)
+  isBlocked     Boolean   @default(false)  // Flag for inappropriate content
+  blockReason   String?   // Admin's reason for blocking
+  ownerId       String
+  owner         User      @relation(fields: [ownerId], references: [id])
+  bookings      Booking[]
+  reviews       Review[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
  
 model Booking {
@@ -140,5 +144,17 @@ model OtpCode {
   code      String
   expiresAt DateTime
   used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   // 'listing_blocked' | 'listing_removed' | 'warning' | 'info'
+  data      Json?    // Additional data (listingId, reason, etc.)
+  read      Boolean  @default(false)
   createdAt DateTime @default(now())
 }
