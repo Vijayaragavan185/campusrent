@@ -132,6 +132,7 @@ safeUse('/api/messages', './routes/messages.routes');
 safeUse('/api/users',    './routes/users.routes');
 safeUse('/api/reviews',  './routes/reviews.routes');
 safeUse('/api/payments', './routes/payments.routes');
+safeUse('/api/notifications', './routes/notifications.routes');
 safeUse('/api/admin',    './routes/admin.routes');
  
 // ── 404 for unknown routes ────────────────────────────────
