@@ -18,6 +18,7 @@ model User {
   avatar      String?
   verified    Boolean   @default(false)
   isLister    Boolean   @default(false)
+  isAdmin     Boolean   @default(false)
   rating      Float     @default(0)
   payoutUpiId String?
   createdAt   DateTime  @default(now())
