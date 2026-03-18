@@ -272,3 +272,204 @@ exports.getDashboardInfo = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * PUT /api/admin/listings/:listingId/block
+ * Block/flag an inappropriate listing
+ */
+exports.blockListing = async (req, res, next) => {
+  try {
+    const { listingId } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || reason.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Please provide a reason for blocking this listing.',
+      });
+    }
+
+    const listing = await prisma.listing.findUnique({
+      where: { id: listingId },
+      include: { owner: true },
+    });
+
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found.' });
+    }
+
+    // Update listing status
+    const blockedListing = await prisma.listing.update({
+      where: { id: listingId },
+      data: {
+        isBlocked: true,
+        blockReason: reason,
+      },
+    });
+
+    // Send notification to listing owner
+    await prisma.notification.create({
+      data: {
+        userId: listing.owner.id,
+        title: 'Content Removed',
+        message: `Your listing "${listing.title}" has been removed for the following reason: ${reason}`,
+        type: 'listing_blocked',
+        data: {
+          listingId: listing.id,
+          listingTitle: listing.title,
+          blockReason: reason,
+          blockedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Listing blocked and owner notified.',
+      listing: blockedListing,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * PUT /api/admin/listings/:listingId/unblock
+ * Unblock a listing if incorrectly flagged
+ */
+exports.unblockListing = async (req, res, next) => {
+  try {
+    const { listingId } = req.params;
+
+    const listing = await prisma.listing.findUnique({
+      where: { id: listingId },
+      include: { owner: true },
+    });
+
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found.' });
+    }
+
+    // Update listing status
+    const unblockedListing = await prisma.listing.update({
+      where: { id: listingId },
+      data: {
+        isBlocked: false,
+        blockReason: null,
+      },
+    });
+
+    // Send notification to listing owner
+    await prisma.notification.create({
+      data: {
+        userId: listing.owner.id,
+        title: 'Content Restored',
+        message: `Your listing "${listing.title}" has been restored and is now visible to users.`,
+        type: 'info',
+        data: {
+          listingId: listing.id,
+          listingTitle: listing.title,
+          restoredAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Listing unblocked and owner notified.',
+      listing: unblockedListing,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /api/admin/listings/blocked
+ * Get all blocked listings
+ */
+exports.getBlockedListings = async (req, res, next) => {
+  try {
+    const { limit = 20, offset = 0 } = req.query;
+    const limitNum = Math.min(parseInt(limit) || 20, 100);
+    const offsetNum = parseInt(offset) || 0;
+
+    const blockedListings = await prisma.listing.findMany({
+      where: { isBlocked: true },
+      include: {
+        owner: {
+          select: { id: true, email: true, name: true },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limitNum,
+      skip: offsetNum,
+    });
+
+    const totalCount = await prisma.listing.count({
+      where: { isBlocked: true },
+    });
+
+    res.json({
+      blockedListings,
+      totalCount,
+      limit: limitNum,
+      offset: offsetNum,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /api/admin/notifications
+ * Get recent admin notifications
+ */
+exports.getNotifications = async (req, res, next) => {
+  try {
+    const { limit = 20, offset = 0 } = req.query;
+    const limitNum = Math.min(parseInt(limit) || 20, 100);
+    const offsetNum = parseInt(offset) || 0;
+
+    const notifications = await prisma.notification.findMany({
+      where: { userId: req.userId },
+      orderBy: { createdAt: 'desc' },
+      take: limitNum,
+      skip: offsetNum,
+    });
+
+    const totalCount = await prisma.notification.count({
+      where: { userId: req.userId },
+    });
+
+    res.json({
+      notifications,
+      totalCount,
+      limit: limitNum,
+      offset: offsetNum,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * PUT /api/admin/notifications/:notificationId/read
+ * Mark notification as read
+ */
+exports.markNotificationRead = async (req, res, next) => {
+  try {
+    const { notificationId } = req.params;
+
+    const notification = await prisma.notification.update({
+      where: { id: notificationId },
+      data: { read: true },
+    });
+
+    res.json({
+      success: true,
+      notification,
+    });
+  } catch (err) {
+    next(err);
+  }
+};

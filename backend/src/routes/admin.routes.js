@@ -32,4 +32,17 @@ router.put(
 // Users
 router.get('/users', admin.getAllUsers);
 
+// Content Moderation
+router.put(
+  '/listings/:listingId/block',
+  [body('reason').trim().notEmpty().withMessage('Please provide a reason for blocking.')],
+  admin.blockListing
+);
+router.put('/listings/:listingId/unblock', admin.unblockListing);
+router.get('/listings/blocked', admin.getBlockedListings);
+
+// Notifications
+router.get('/notifications', admin.getNotifications);
+router.put('/notifications/:notificationId/read', admin.markNotificationRead);
+
 module.exports = router;
