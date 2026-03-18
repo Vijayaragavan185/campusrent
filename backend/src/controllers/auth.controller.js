@@ -171,10 +171,54 @@ exports.getMe = async (req, res, next) => {
       select: {
         id: true, email: true, name: true, avatar: true,
         department: true, year: true, verified: true,
-        isLister: true, rating: true, payoutUpiId: true, createdAt: true
+        isLister: true, isAdmin: true, rating: true, payoutUpiId: true, createdAt: true
       },
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (err) { next(err); }
+};
+
+// POST /api/auth/create-admin — creates an admin user (direct creation)
+exports.createAdmin = async (req, res, next) => {
+  try {
+    const validationError = getValidationError(req);
+    if (validationError) return next(validationError);
+
+    const { email, password, name } = req.body;
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(409).json({
+        error: 'An account with this email already exists.',
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const admin = await prisma.user.create({
+      data: {
+        email,
+        name,
+        password: hashedPassword,
+        verified: true,
+        isAdmin: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        isAdmin: true,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Admin user created successfully',
+      admin,
+      token: signToken(admin.id),
+    });
+  } catch (err) {
+    next(err);
+  }
 };
