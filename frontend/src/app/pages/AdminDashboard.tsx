@@ -4,68 +4,95 @@ import { ArrowLeft, BarChart3, Users, FileText, DollarSign, Check, X, ShieldAler
 import { toast } from "sonner";
 import { useAuthStore } from "../../store/authStore";
 
+const getAuthToken = () => {
+  const tokenFromSession = sessionStorage.getItem('authToken');
+  if (tokenFromSession) return tokenFromSession;
+
+  try {
+    const stored = localStorage.getItem('campusrent-auth');
+    if (!stored) return null;
+    return JSON.parse(stored)?.state?.token || null;
+  } catch {
+    return null;
+  }
+};
+
+const authHeaders = (): Record<string, string> => {
+  const token = getAuthToken();
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+};
+
+const parseJsonOrThrow = async (response: Response) => {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || 'Request failed');
+  }
+  return data;
+};
+
 const adminAPI = {
   getDashboardInfo: () => fetch('/api/admin/dashboard/info', {
-    headers: { Authorization: `Bearer ${sessionStorage.getItem('authToken')}` }
-  }).then((r) => r.json()),
+    headers: authHeaders()
+  }).then(parseJsonOrThrow),
   getAllBookings: (status: string | null, limit: number = 50, offset: number = 0) => fetch(
     `/api/admin/bookings?${status ? `status=${status}&` : ''}limit=${limit}&offset=${offset}`,
-    { headers: { Authorization: `Bearer ${sessionStorage.getItem('authToken')}` } }
-  ).then((r) => r.json()),
+    { headers: authHeaders() }
+  ).then(parseJsonOrThrow),
   getAllPayouts: (status: string | null, limit: number = 50, offset: number = 0) => fetch(
     `/api/admin/payouts?${status ? `status=${status}&` : ''}limit=${limit}&offset=${offset}`,
-    { headers: { Authorization: `Bearer ${sessionStorage.getItem('authToken')}` } }
-  ).then((r) => r.json()),
+    { headers: authHeaders() }
+  ).then(parseJsonOrThrow),
   markPayoutProcessed: (payoutId: string, transactionId: string = '') => fetch(
     `/api/admin/payouts/${payoutId}/mark-processed`,
     {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionStorage.getItem('authToken')}`
+        ...authHeaders(),
       },
       body: JSON.stringify({ transactionId })
     }
-  ).then((r) => r.json()),
+  ).then(parseJsonOrThrow),
   getAllUsers: (limit: number = 50, offset: number = 0, search: string = '') => fetch(
     `/api/admin/users?limit=${limit}&offset=${offset}${search ? `&search=${search}` : ''}`,
-    { headers: { Authorization: `Bearer ${sessionStorage.getItem('authToken')}` } }
-  ).then((r) => r.json()),
+    { headers: authHeaders() }
+  ).then(parseJsonOrThrow),
   getAllListings: (status: string = 'all', limit: number = 50, offset: number = 0, search: string = '') => fetch(
     `/api/admin/listings?status=${status}&limit=${limit}&offset=${offset}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
-    { headers: { Authorization: `Bearer ${sessionStorage.getItem('authToken')}` } }
-  ).then((r) => r.json()),
+    { headers: authHeaders() }
+  ).then(parseJsonOrThrow),
   blockListing: (listingId: string, reason: string) => fetch(
     `/api/admin/listings/${listingId}/block`,
     {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionStorage.getItem('authToken')}`,
+        ...authHeaders(),
       },
       body: JSON.stringify({ reason }),
     }
-  ).then((r) => r.json()),
+  ).then(parseJsonOrThrow),
   unblockListing: (listingId: string) => fetch(
     `/api/admin/listings/${listingId}/unblock`,
     {
       method: 'PUT',
       headers: {
-        Authorization: `Bearer ${sessionStorage.getItem('authToken')}`,
+        ...authHeaders(),
       },
     }
-  ).then((r) => r.json()),
+  ).then(parseJsonOrThrow),
   deleteListing: (listingId: string, reason?: string) => fetch(
     `/api/admin/listings/${listingId}`,
     {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionStorage.getItem('authToken')}`,
+        ...authHeaders(),
       },
       body: JSON.stringify({ reason: reason || '' }),
     }
-  ).then((r) => r.json()),
+  ).then(parseJsonOrThrow),
 };
 
 export default function AdminDashboard() {
@@ -109,10 +136,22 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       const data = await adminAPI.getDashboardInfo();
-      setDashboardInfo(data);
+      setDashboardInfo({
+        stats: {
+          totalUsers: Number(data?.stats?.totalUsers || 0),
+          totalListings: Number(data?.stats?.totalListings || 0),
+          totalBookings: Number(data?.stats?.totalBookings || 0),
+          totalPayments: Number(data?.stats?.totalPayments || 0),
+          pendingPayouts: Number(data?.stats?.pendingPayouts || 0),
+          totalPaymentAmount: Number(data?.stats?.totalPaymentAmount || 0),
+          totalProcessedPayoutAmount: Number(data?.stats?.totalProcessedPayoutAmount || 0),
+        },
+        recentBookings: Array.isArray(data?.recentBookings) ? data.recentBookings : [],
+      });
     } catch (err) {
-      toast.error('Failed to load dashboard info');
+      toast.error(err instanceof Error ? err.message : 'Failed to load dashboard info');
       console.error(err);
+      setDashboardInfo(null);
     } finally {
       setLoading(false);
     }
@@ -369,7 +408,7 @@ export default function AdminDashboard() {
                               <p className="text-gray-500">{booking.renter.email}</p>
                             </div>
                           </td>
-                          <td className="py-3 px-4">₹{booking.payment?.amount.toFixed(2)}</td>
+                          <td className="py-3 px-4">₹{Number(booking.payment?.amount || 0).toFixed(2)}</td>
                           <td className="py-3 px-4">
                             <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
                               booking.payment?.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
@@ -414,7 +453,7 @@ export default function AdminDashboard() {
                             <p className="text-gray-500">{booking.renter.email}</p>
                           </div>
                         </td>
-                        <td className="py-3 px-4">₹{booking.payment?.amount.toFixed(2)}</td>
+                        <td className="py-3 px-4">₹{Number(booking.payment?.amount || 0).toFixed(2)}</td>
                         <td className="py-3 px-4">
                           <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
                             booking.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
@@ -516,7 +555,7 @@ export default function AdminDashboard() {
                         <td className="py-3 px-4">
                           {u.isLister ? <Check className="w-4 h-4 text-green-600" /> : <X className="w-4 h-4 text-red-600" />}
                         </td>
-                        <td className="py-3 px-4">{u.rating.toFixed(1)}</td>
+                        <td className="py-3 px-4">{Number(u.rating || 0).toFixed(1)}</td>
                       </tr>
                     ))}
                   </tbody>
