@@ -124,7 +124,17 @@ exports.verifyOtp = async (req, res, next) => {
     });
     await prisma.otpCode.update({ where: { id: record.id }, data: { used: true } });
 
-    res.json({ token: signToken(user.id), user: { id: user.id, email, name: user.name } });
+    res.json({
+      token: signToken(user.id),
+      user: {
+        id: user.id,
+        email,
+        name: user.name,
+        isAdmin: user.isAdmin,
+        isLister: user.isLister,
+        verified: user.verified,
+      },
+    });
   } catch (err) { next(err); }
 };
  
@@ -158,7 +168,17 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    res.json({ token: signToken(user.id), user: { id: user.id, email, name: user.name } });
+    res.json({
+      token: signToken(user.id),
+      user: {
+        id: user.id,
+        email,
+        name: user.name,
+        isAdmin: user.isAdmin,
+        isLister: user.isLister,
+        verified: user.verified,
+      },
+    });
   } catch (err) { next(err); }
 };
  

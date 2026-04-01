@@ -306,6 +306,20 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-sm text-blue-900 font-semibold">Need to moderate user listings?</p>
+            <p className="text-xs text-blue-700">Open Listings Moderation to Block, Unblock, or Delete inappropriate listings.</p>
+          </div>
+          <button
+            onClick={() => setActiveTab('moderation')}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#2D6BE4] text-white rounded-lg hover:bg-[#1f57c5] transition-colors text-sm font-semibold"
+          >
+            <ShieldAlert className="w-4 h-4" />
+            Manage Listings
+          </button>
+        </div>
+
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div>
