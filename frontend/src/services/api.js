@@ -88,4 +88,9 @@ export const paymentsAPI = {
   verify:      (payload)   => api.post('/payments/verify', payload),
 };
 
+export const adminAPI = {
+  deleteListing: (listingId, reason) =>
+    api.delete(`/admin/listings/${listingId}`, { data: reason ? { reason } : {} }),
+};
+
 export default api;

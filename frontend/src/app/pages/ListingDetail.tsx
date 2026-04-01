@@ -4,7 +4,7 @@ import { ArrowLeft, Star, MapPin, CheckCircle, Calendar as CalendarIcon, Message
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import * as Dialog from "@radix-ui/react-dialog";
-import { bookingsAPI, listingsAPI, reviewsAPI } from "../../services/api";
+import { adminAPI, bookingsAPI, listingsAPI, reviewsAPI } from "../../services/api";
 import { toListing, toReview } from "../../services/normalizers";
 import { useAuthStore } from "../../store/authStore";
 import { Calendar } from "../components/ui/calendar";
@@ -39,6 +39,7 @@ export default function ListingDetail() {
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [deletingByAdmin, setDeletingByAdmin] = useState(false);
 
   const blockedDateSet = useMemo(() => {
     if (!listing?.blockedDates) return new Set<string>();
@@ -102,6 +103,29 @@ export default function ListingDetail() {
     currentUser?.id &&
     (currentUser.id === listing.owner?.id || currentUser.id === listing.ownerId)
   );
+  const isAdmin = Boolean(currentUser?.isAdmin);
+
+  const handleAdminDeleteListing = async () => {
+    if (!listing?.id) return;
+
+    const confirmed = window.confirm("Delete this listing permanently? This cannot be undone.");
+    if (!confirmed) return;
+
+    const reasonInput = window.prompt("Reason for deletion (optional):", "Inappropriate listing");
+    const reason = typeof reasonInput === 'string' ? reasonInput.trim() : '';
+
+    try {
+      setDeletingByAdmin(true);
+      await adminAPI.deleteListing(listing.id, reason);
+      toast.success('Listing deleted by admin');
+      navigate('/admin');
+    } catch (error: any) {
+      const message = error?.response?.data?.error || 'Failed to delete listing';
+      toast.error(message);
+    } finally {
+      setDeletingByAdmin(false);
+    }
+  };
 
   const handleBookingSubmit = async () => {
     if (!currentUser?.id) {
@@ -368,12 +392,24 @@ export default function ListingDetail() {
                   </button>
                 </Link>
               ) : (
-                <Link to={conversationId ? `/chat/${conversationId}` : '/signup'}>
-                  <button className="w-full py-3 border-2 border-[#2D6BE4] text-[#2D6BE4] rounded-xl hover:bg-[#2D6BE4]/5 transition-colors flex items-center justify-center gap-2">
-                    <MessageSquare className="w-5 h-5" />
-                    Message Owner
-                  </button>
-                </Link>
+                <>
+                  <Link to={conversationId ? `/chat/${conversationId}` : '/signup'}>
+                    <button className="w-full py-3 border-2 border-[#2D6BE4] text-[#2D6BE4] rounded-xl hover:bg-[#2D6BE4]/5 transition-colors flex items-center justify-center gap-2">
+                      <MessageSquare className="w-5 h-5" />
+                      Message Owner
+                    </button>
+                  </Link>
+
+                  {isAdmin && (
+                    <button
+                      onClick={handleAdminDeleteListing}
+                      disabled={deletingByAdmin}
+                      className="w-full mt-3 py-3 border-2 border-[#DC2626] text-[#DC2626] rounded-xl hover:bg-[#DC2626]/5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {deletingByAdmin ? 'Deleting…' : 'Delete Listing (Admin)'}
+                    </button>
+                  )}
+                </>
               )}
 
               <div className="mt-6 pt-6 border-t border-gray-200">
