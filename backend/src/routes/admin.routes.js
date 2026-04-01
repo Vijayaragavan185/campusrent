@@ -33,12 +33,18 @@ router.put(
 router.get('/users', admin.getAllUsers);
 
 // Content Moderation
+router.get('/listings', admin.getAllListings);
 router.put(
   '/listings/:listingId/block',
   [body('reason').trim().notEmpty().withMessage('Please provide a reason for blocking.')],
   admin.blockListing
 );
 router.put('/listings/:listingId/unblock', admin.unblockListing);
+router.delete(
+  '/listings/:listingId',
+  [body('reason').optional().trim().isLength({ min: 5 }).withMessage('Reason must be at least 5 characters if provided.')],
+  admin.deleteListing
+);
 router.get('/listings/blocked', admin.getBlockedListings);
 
 // Notifications

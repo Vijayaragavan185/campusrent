@@ -274,6 +274,54 @@ exports.getDashboardInfo = async (req, res, next) => {
 };
 
 /**
+ * GET /api/admin/listings
+ * Get listings for admin moderation
+ */
+exports.getAllListings = async (req, res, next) => {
+  try {
+    const { limit = 50, offset = 0, status = 'all', search = '' } = req.query;
+    const limitNum = Math.min(parseInt(limit) || 50, 100);
+    const offsetNum = parseInt(offset) || 0;
+
+    const where = {
+      ...(status === 'blocked' ? { isBlocked: true } : status === 'active' ? { isBlocked: false } : {}),
+      ...(search
+        ? {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' } },
+              { description: { contains: search, mode: 'insensitive' } },
+              { owner: { email: { contains: search, mode: 'insensitive' } } },
+              { owner: { name: { contains: search, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+
+    const listings = await prisma.listing.findMany({
+      where,
+      include: {
+        owner: { select: { id: true, name: true, email: true } },
+        _count: { select: { bookings: true, reviews: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limitNum,
+      skip: offsetNum,
+    });
+
+    const total = await prisma.listing.count({ where });
+
+    res.json({
+      listings,
+      total,
+      limit: limitNum,
+      offset: offsetNum,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * PUT /api/admin/listings/:listingId/block
  * Block/flag an inappropriate listing
  */
@@ -377,6 +425,122 @@ exports.unblockListing = async (req, res, next) => {
       success: true,
       message: 'Listing unblocked and owner notified.',
       listing: unblockedListing,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * DELETE /api/admin/listings/:listingId
+ * Permanently delete a listing with safeguards
+ */
+exports.deleteListing = async (req, res, next) => {
+  try {
+    const { listingId } = req.params;
+    const { reason } = req.body || {};
+
+    if (reason && reason.trim().length > 0 && reason.trim().length < 5) {
+      return res.status(400).json({
+        error: 'Deletion reason must be at least 5 characters when provided.',
+      });
+    }
+
+    const listing = await prisma.listing.findUnique({
+      where: { id: listingId },
+      include: {
+        owner: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    if (!listing) {
+      return res.status(404).json({ error: 'Listing not found.' });
+    }
+
+    // Safeguard: do not delete listings with active bookings
+    const activeBookingStatuses = ['pending', 'accepted', 'requested_return', 'returned'];
+    const activeBookingsCount = await prisma.booking.count({
+      where: {
+        listingId,
+        status: { in: activeBookingStatuses },
+      },
+    });
+
+    if (activeBookingsCount > 0) {
+      return res.status(409).json({
+        error: 'Cannot delete listing with active bookings. Please resolve bookings first.',
+        activeBookingsCount,
+      });
+    }
+
+    const cleanupResult = await prisma.$transaction(async (tx) => {
+      await tx.bookingStatusEvent.deleteMany({
+        where: { booking: { listingId } },
+      });
+
+      await tx.payout.deleteMany({
+        where: { booking: { listingId } },
+      });
+
+      await tx.payment.deleteMany({
+        where: { booking: { listingId } },
+      });
+
+      const deletedBookings = await tx.booking.deleteMany({
+        where: { listingId },
+      });
+
+      const deletedReviews = await tx.review.deleteMany({
+        where: { listingId },
+      });
+
+      // conversationId format: userId1_userId2_listingId
+      const deletedMessages = await tx.message.deleteMany({
+        where: {
+          conversationId: {
+            endsWith: `_${listingId}`,
+          },
+        },
+      });
+
+      const deletedListing = await tx.listing.delete({
+        where: { id: listingId },
+      });
+
+      return {
+        deletedListing,
+        deletedBookingsCount: deletedBookings.count,
+        deletedReviewsCount: deletedReviews.count,
+        deletedMessagesCount: deletedMessages.count,
+      };
+    });
+
+    await prisma.notification.create({
+      data: {
+        userId: listing.owner.id,
+        title: 'Listing Removed by Admin',
+        message: `Your listing "${listing.title}" has been permanently removed by admin.${reason ? ` Reason: ${reason}` : ''}`,
+        type: 'listing_removed',
+        data: {
+          listingId,
+          listingTitle: listing.title,
+          reason: reason || null,
+          removedAt: new Date().toISOString(),
+          removedByAdminId: req.userId,
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Listing deleted successfully.',
+      deleted: {
+        listingId: cleanupResult.deletedListing.id,
+        title: cleanupResult.deletedListing.title,
+        bookings: cleanupResult.deletedBookingsCount,
+        reviews: cleanupResult.deletedReviewsCount,
+        messages: cleanupResult.deletedMessagesCount,
+      },
     });
   } catch (err) {
     next(err);

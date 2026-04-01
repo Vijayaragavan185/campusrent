@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, BarChart3, Users, FileText, DollarSign, Eye, Check, X } from "lucide-react";
+import { ArrowLeft, BarChart3, Users, FileText, DollarSign, Check, X, ShieldAlert, Ban, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "../../store/authStore";
-import { authAPI } from "../../services/api";
 
 const adminAPI = {
   getDashboardInfo: () => fetch('/api/admin/dashboard/info', {
@@ -32,6 +31,41 @@ const adminAPI = {
     `/api/admin/users?limit=${limit}&offset=${offset}${search ? `&search=${search}` : ''}`,
     { headers: { Authorization: `Bearer ${sessionStorage.getItem('authToken')}` } }
   ).then((r) => r.json()),
+  getAllListings: (status: string = 'all', limit: number = 50, offset: number = 0, search: string = '') => fetch(
+    `/api/admin/listings?status=${status}&limit=${limit}&offset=${offset}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
+    { headers: { Authorization: `Bearer ${sessionStorage.getItem('authToken')}` } }
+  ).then((r) => r.json()),
+  blockListing: (listingId: string, reason: string) => fetch(
+    `/api/admin/listings/${listingId}/block`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionStorage.getItem('authToken')}`,
+      },
+      body: JSON.stringify({ reason }),
+    }
+  ).then((r) => r.json()),
+  unblockListing: (listingId: string) => fetch(
+    `/api/admin/listings/${listingId}/unblock`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${sessionStorage.getItem('authToken')}`,
+      },
+    }
+  ).then((r) => r.json()),
+  deleteListing: (listingId: string, reason?: string) => fetch(
+    `/api/admin/listings/${listingId}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionStorage.getItem('authToken')}`,
+      },
+      body: JSON.stringify({ reason: reason || '' }),
+    }
+  ).then((r) => r.json()),
 };
 
 export default function AdminDashboard() {
@@ -53,7 +87,9 @@ export default function AdminDashboard() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [listings, setListings] = useState<any[]>([]);
   const [processingPayoutId, setProcessingPayoutId] = useState<string | null>(null);
+  const [moderationActionListingId, setModerationActionListingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTab === 'overview') {
@@ -64,6 +100,8 @@ export default function AdminDashboard() {
       loadPayouts();
     } else if (activeTab === 'users') {
       loadUsers();
+    } else if (activeTab === 'moderation') {
+      loadListings();
     }
   }, [activeTab]);
 
@@ -119,6 +157,19 @@ export default function AdminDashboard() {
     }
   };
 
+  const loadListings = async () => {
+    try {
+      setLoading(true);
+      const data = await adminAPI.getAllListings('all', 100, 0);
+      setListings(data.listings || []);
+    } catch (err) {
+      toast.error('Failed to load listings for moderation');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleMarkPayoutProcessed = async (payoutId: string) => {
     try {
       setProcessingPayoutId(payoutId);
@@ -134,6 +185,73 @@ export default function AdminDashboard() {
       console.error(err);
     } finally {
       setProcessingPayoutId(null);
+    }
+  };
+
+  const handleBlockListing = async (listing: any) => {
+    const reason = window.prompt(`Enter reason for blocking "${listing.title}"`);
+    if (!reason || reason.trim().length === 0) {
+      toast.error('Blocking reason is required');
+      return;
+    }
+
+    try {
+      setModerationActionListingId(listing.id);
+      const result = await adminAPI.blockListing(listing.id, reason.trim());
+      if (result.success) {
+        toast.success('Listing blocked successfully');
+        await loadListings();
+      } else {
+        toast.error(result.error || 'Failed to block listing');
+      }
+    } catch (err) {
+      toast.error('Error blocking listing');
+      console.error(err);
+    } finally {
+      setModerationActionListingId(null);
+    }
+  };
+
+  const handleUnblockListing = async (listing: any) => {
+    try {
+      setModerationActionListingId(listing.id);
+      const result = await adminAPI.unblockListing(listing.id);
+      if (result.success) {
+        toast.success('Listing unblocked successfully');
+        await loadListings();
+      } else {
+        toast.error(result.error || 'Failed to unblock listing');
+      }
+    } catch (err) {
+      toast.error('Error unblocking listing');
+      console.error(err);
+    } finally {
+      setModerationActionListingId(null);
+    }
+  };
+
+  const handleDeleteListing = async (listing: any) => {
+    const shouldDelete = window.confirm(
+      `Delete listing "${listing.title}" permanently? This cannot be undone.`
+    );
+    if (!shouldDelete) return;
+
+    const reason = window.prompt('Optional deletion reason (recommended):') || '';
+
+    try {
+      setModerationActionListingId(listing.id);
+      const result = await adminAPI.deleteListing(listing.id, reason);
+      if (result.success) {
+        toast.success('Listing deleted successfully');
+        await loadListings();
+      } else {
+        toast.error(result.error || 'Failed to delete listing');
+      }
+    } catch (err) {
+      toast.error('Error deleting listing');
+      console.error(err);
+    } finally {
+      setModerationActionListingId(null);
     }
   };
 
@@ -167,6 +285,7 @@ export default function AdminDashboard() {
               { id: 'bookings', label: 'Bookings', icon: FileText },
               { id: 'payouts', label: 'Payouts', icon: DollarSign },
               { id: 'users', label: 'Users', icon: Users },
+              { id: 'moderation', label: 'Listings Moderation', icon: ShieldAlert },
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -386,6 +505,93 @@ export default function AdminDashboard() {
                         <td className="py-3 px-4">{u.rating.toFixed(1)}</td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Listings Moderation Tab */}
+        {activeTab === 'moderation' && (
+          <div className="bg-white rounded-xl p-6">
+            <h3 className="text-lg font-semibold mb-4">Listings Moderation</h3>
+            {loading ? (
+              <div className="text-center py-12">Loading...</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2 px-4">Listing</th>
+                      <th className="text-left py-2 px-4">Owner</th>
+                      <th className="text-left py-2 px-4">Status</th>
+                      <th className="text-left py-2 px-4">Reason</th>
+                      <th className="text-left py-2 px-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listings.map((listing) => {
+                      const actionInProgress = moderationActionListingId === listing.id;
+                      return (
+                        <tr key={listing.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4">
+                            <div>
+                              <p className="font-semibold">{listing.title}</p>
+                              <p className="text-gray-500 text-xs">{listing.category} • ₹{listing.pricePerDay}/day</p>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div>
+                              <p className="font-semibold">{listing.owner?.name || 'Unknown'}</p>
+                              <p className="text-gray-500 text-xs">{listing.owner?.email || '-'}</p>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                              listing.isBlocked ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                            }`}>
+                              {listing.isBlocked ? 'Blocked' : 'Active'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-xs text-gray-600 max-w-[220px]">
+                            {listing.blockReason || '-'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              {!listing.isBlocked ? (
+                                <button
+                                  onClick={() => handleBlockListing(listing)}
+                                  disabled={actionInProgress}
+                                  className="flex items-center gap-1 px-3 py-1 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-60 text-xs"
+                                >
+                                  <Ban className="w-3 h-3" />
+                                  Block
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleUnblockListing(listing)}
+                                  disabled={actionInProgress}
+                                  className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-60 text-xs"
+                                >
+                                  <Check className="w-3 h-3" />
+                                  Unblock
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleDeleteListing(listing)}
+                                disabled={actionInProgress}
+                                className="flex items-center gap-1 px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 text-xs"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
