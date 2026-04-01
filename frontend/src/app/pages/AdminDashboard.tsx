@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { ArrowLeft, BarChart3, Users, FileText, DollarSign, Check, X, ShieldAlert, Ban, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "../../store/authStore";
+import { formatINRWhole } from "../../services/currency";
 
 const getAuthToken = () => {
   const tokenFromSession = sessionStorage.getItem('authToken');
@@ -591,7 +592,7 @@ export default function AdminDashboard() {
                           <td className="py-3 px-4">
                             <div>
                               <p className="font-semibold">{listing.title}</p>
-                              <p className="text-gray-500 text-xs">{listing.category} • ₹{listing.pricePerDay}/day</p>
+                              <p className="text-gray-500 text-xs">{listing.category} • {formatINRWhole(listing.pricePerDay)}/day</p>
                             </div>
                           </td>
                           <td className="py-3 px-4">

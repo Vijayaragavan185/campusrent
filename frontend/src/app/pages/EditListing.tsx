@@ -246,7 +246,7 @@ export default function EditListing() {
           </div>
 
           <div className="mb-6">
-            <label htmlFor="price" className="block text-[#111827] mb-2">Price per day ($)</label>
+            <label htmlFor="price" className="block text-[#111827] mb-2">Price per day (₹)</label>
             <input
               id="price"
               type="number"

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { usersAPI } from "../../services/api";
 import { toListing, toReview, toUser } from "../../services/normalizers";
 import { useAuthStore } from "../../store/authStore";
+import { formatINRWhole } from "../../services/currency";
 
 export default function Profile() {
   const { id } = useParams();
@@ -163,7 +164,7 @@ export default function Profile() {
                           <span className="text-sm">{listing.rating.toFixed(1)}</span>
                         </div>
                         <div className="text-lg text-[#2D6BE4]" style={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}>
-                          ${listing.pricePerDay}/day
+                          {formatINRWhole(listing.pricePerDay)}/day
                         </div>
                       </div>
                     </div>

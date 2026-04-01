@@ -212,7 +212,7 @@ export default function PostListing() {
           {/* Price */}
           <div className="mb-6">
             <label htmlFor="price" className="block text-[#111827] mb-2">
-              Price per day ($)
+              Price per day (₹)
             </label>
             <input
               id="price"
@@ -224,7 +224,7 @@ export default function PostListing() {
               className="w-full px-4 py-3 bg-[#F3F4F6] border border-transparent rounded-xl focus:ring-2 focus:ring-[#2D6BE4] focus:border-transparent outline-none"
               required
             />
-            <p className="text-sm text-[#4B5563] mt-1">Suggested: $20-$30 for similar items</p>
+            <p className="text-sm text-[#4B5563] mt-1">Suggested: ₹20-₹30 for similar items</p>
           </div>
 
           {/* Pickup Location */}

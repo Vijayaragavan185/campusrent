@@ -1,6 +1,7 @@
 import { Star, MapPin } from "lucide-react";
 import { Link } from "react-router";
 import { Listing } from "../types";
+import { formatINRWhole } from "../../services/currency";
 
 interface ListingCardProps {
   listing: Listing;
@@ -71,7 +72,7 @@ export default function ListingCard({ listing }: ListingCardProps) {
           <div className="flex items-center justify-between">
             <div>
               <span className="text-2xl font-bold text-[#2D6BE4]" style={{ fontFamily: 'var(--font-display)' }}>
-                ${listing.pricePerDay}
+                {formatINRWhole(listing.pricePerDay)}
               </span>
               <span className="text-sm text-[#4B5563]">/day</span>
             </div>

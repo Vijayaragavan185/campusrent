@@ -10,6 +10,7 @@ import { useAuthStore } from "../../store/authStore";
 import { Calendar } from "../components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 import { format } from "date-fns";
+import { formatINR, formatINRWhole } from "../../services/currency";
 
 function getDateRangeKeys(startDate: string, endDate: string) {
   const start = new Date(startDate);
@@ -170,7 +171,7 @@ export default function ListingDetail() {
         totalCost: total,
       });
 
-      toast.success(`Booking request sent! Total: $${total} for ${days} days`);
+      toast.success(`Booking request sent! Total: ${formatINR(total)} for ${days} days`);
       setBookingDialogOpen(false);
     } catch (error: any) {
       const message = error?.response?.data?.error || 'Failed to send booking request';
@@ -367,7 +368,7 @@ export default function ListingDetail() {
             <div className="sticky top-24 bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-sm">
               <div className="mb-6">
                 <div className="text-4xl text-[#2D6BE4] mb-1" style={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}>
-                  ${listing.pricePerDay}
+                  {formatINRWhole(listing.pricePerDay)}
                 </div>
                 <div className="text-[#4B5563]">per day</div>
               </div>
@@ -521,16 +522,16 @@ export default function ListingDetail() {
               <div className="mb-6 p-4 bg-[#F3F4F6] rounded-xl">
                 <div className="flex justify-between mb-2">
                   <span className="text-[#4B5563]">
-                    ${listing.pricePerDay} x {Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24))} days
+                    {formatINRWhole(listing.pricePerDay)} x {Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24))} days
                   </span>
                   <span className="text-[#111827]">
-                    ${Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) * listing.pricePerDay}
+                    {formatINR(Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) * listing.pricePerDay)}
                   </span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-gray-300">
                   <span className="text-[#111827]" style={{ fontFamily: 'var(--font-display)', fontWeight: 600 }}>Total</span>
                   <span className="text-[#2D6BE4] text-xl" style={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}>
-                    ${Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) * listing.pricePerDay}
+                    {formatINR(Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) * listing.pricePerDay)}
                   </span>
                 </div>
               </div>

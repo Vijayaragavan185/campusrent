@@ -6,6 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { bookingsAPI, reviewsAPI, paymentsAPI } from "../../services/api";
 import { toBooking } from "../../services/normalizers";
 import { useAuthStore } from "../../store/authStore";
+import { formatINR } from "../../services/currency";
 
 type TabType = "renting" | "lending";
 type UpdateStatus = 'accepted' | 'rejected' | 'cancelled' | 'requested_return' | 'returned' | 'completed';
@@ -421,7 +422,7 @@ export default function MyBookings() {
                       {Number(booking.potentialLateFee || 0) > 0 && (
                         <div className="mb-3">
                           <span className="inline-flex text-xs px-2.5 py-1 rounded-full bg-[#E74C3C]/10 text-[#E74C3C]">
-                            Late fee tracked: ${Number(booking.potentialLateFee).toFixed(2)}
+                            Late fee tracked: {formatINR(booking.potentialLateFee)}
                           </span>
                         </div>
                       )}
@@ -480,7 +481,7 @@ export default function MyBookings() {
                         </div>
                         
                         <div className="text-lg text-[#2D6BE4]" style={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}>
-                          ${booking.totalPrice}
+                          {formatINR(booking.totalPrice)}
                         </div>
                       </div>
                     </div>
@@ -503,7 +504,7 @@ export default function MyBookings() {
                       disabled={payingId === booking.id}
                       className="w-full py-2 bg-[#27AE60] text-white rounded-lg hover:bg-[#229954] transition-colors disabled:opacity-60 font-semibold"
                     >
-                      {payingId === booking.id ? 'Opening Payment...' : `Pay ₹${Number(booking.totalPrice).toFixed(2)}`}
+                      {payingId === booking.id ? 'Opening Payment...' : `Pay ${formatINR(booking.totalPrice)}`}
                     </button>
                   </div>
                 )}

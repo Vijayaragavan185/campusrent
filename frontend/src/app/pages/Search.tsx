@@ -6,6 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as Slider from "@radix-ui/react-slider";
 import { listingsAPI } from "../../services/api";
 import { toListing } from "../../services/normalizers";
+import { formatINRWhole } from "../../services/currency";
 
 const categories = [
   { id: "all", label: "All" },
@@ -123,7 +124,7 @@ export default function Search() {
               )}
               {(priceRange[0] > 0 || priceRange[1] < 100) && (
                 <div className="flex items-center gap-2 px-3 py-1 bg-[#2D6BE4]/10 text-[#2D6BE4] rounded-full text-sm">
-                  ${priceRange[0]} - ${priceRange[1]}
+                  {formatINRWhole(priceRange[0])} - {formatINRWhole(priceRange[1])}
                   <button onClick={() => setPriceRange([0, 100])}>
                     <X className="w-4 h-4" />
                   </button>
@@ -250,8 +251,8 @@ export default function Search() {
                 </Slider.Root>
               </div>
               <div className="flex items-center justify-between text-sm text-[#4B5563]">
-                <span>${priceRange[0]}</span>
-                <span>${priceRange[1]}</span>
+                <span>{formatINRWhole(priceRange[0])}</span>
+                <span>{formatINRWhole(priceRange[1])}</span>
               </div>
             </div>
 

@@ -7,6 +7,7 @@ import { messagesAPI } from "../../services/api";
 import { listingsAPI, usersAPI } from "../../services/api";
 import { toConversation, toListing, toMessage, toUser } from "../../services/normalizers";
 import { useAuthStore } from "../../store/authStore";
+import { formatINRWhole } from "../../services/currency";
 
 function parseConversationId(conversationId: string) {
   const parts = conversationId.split('_');
@@ -151,7 +152,7 @@ export default function Chat() {
                   {conversation.listing.title}
                 </div>
                 <div className="text-sm text-[#2D6BE4]">
-                  ${conversation.listing.pricePerDay}/day
+                  {formatINRWhole(conversation.listing.pricePerDay)}/day
                 </div>
               </div>
             </div>
